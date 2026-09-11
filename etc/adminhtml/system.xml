@@ -53,8 +53,9 @@
                         <field id="auth_type">token</field>
                     </depends>
                 </field>
-                <field id="consumer_secret" translate="label" type="text" sortOrder="500" showInDefault="1" showInWebsite="0" showInStore="0">
+                <field id="consumer_secret" translate="label" type="obscure" sortOrder="500" showInDefault="1" showInWebsite="0" showInStore="0">
                     <label>Consumer secret</label>
+                    <backend_model>Magento\Config\Model\Config\Backend\Encrypted</backend_model>
                     <depends>
                         <field id="enabled">1</field>
                         <field id="auth_type">token</field>
@@ -67,8 +68,9 @@
                         <field id="auth_type">token</field>
                     </depends>
                 </field>
-                <field id="token_secret" translate="label" type="text" sortOrder="650" showInDefault="1" showInWebsite="0" showInStore="0">
+                <field id="token_secret" translate="label" type="obscure" sortOrder="650" showInDefault="1" showInWebsite="0" showInStore="0">
                     <label>Token secret</label>
+                    <backend_model>Magento\Config\Model\Config\Backend\Encrypted</backend_model>
                     <depends>
                         <field id="enabled">1</field>
                         <field id="auth_type">token</field>
@@ -113,8 +115,9 @@
                         <field id="auth_type">token</field>
                     </depends>
                 </field>
-                <field id="consumer_secret" translate="label" type="text" sortOrder="500" showInDefault="1" showInWebsite="0" showInStore="0">
+                <field id="consumer_secret" translate="label" type="obscure" sortOrder="500" showInDefault="1" showInWebsite="0" showInStore="0">
                     <label>Consumer secret</label>
+                    <backend_model>Magento\Config\Model\Config\Backend\Encrypted</backend_model>
                     <depends>
                         <field id="same">0</field>
                         <field id="auth_type">token</field>
@@ -127,8 +130,9 @@
                         <field id="auth_type">token</field>
                     </depends>
                 </field>
-                <field id="token_secret" translate="label" type="text" sortOrder="650" showInDefault="1" showInWebsite="0" showInStore="0">
+                <field id="token_secret" translate="label" type="obscure" sortOrder="650" showInDefault="1" showInWebsite="0" showInStore="0">
                     <label>Token secret</label>
+                    <backend_model>Magento\Config\Model\Config\Backend\Encrypted</backend_model>
                     <depends>
                         <field id="same">0</field>
                         <field id="auth_type">token</field>
@@ -159,8 +163,9 @@
                         <field id="auth_type">token</field>
                     </depends>
                 </field>
-                <field id="consumer_secret" translate="label" type="text" sortOrder="500" showInDefault="1" showInWebsite="0" showInStore="0">
+                <field id="consumer_secret" translate="label" type="obscure" sortOrder="500" showInDefault="1" showInWebsite="0" showInStore="0">
                     <label>Consumer secret</label>
+                    <backend_model>Magento\Config\Model\Config\Backend\Encrypted</backend_model>
                     <depends>
                         <field id="same">0</field>
                         <field id="auth_type">token</field>
@@ -173,8 +178,9 @@
                         <field id="auth_type">token</field>
                     </depends>
                 </field>
-                <field id="token_secret" translate="label" type="text" sortOrder="650" showInDefault="1" showInWebsite="0" showInStore="0">
+                <field id="token_secret" translate="label" type="obscure" sortOrder="650" showInDefault="1" showInWebsite="0" showInStore="0">
                     <label>Token secret</label>
+                    <backend_model>Magento\Config\Model\Config\Backend\Encrypted</backend_model>
                     <depends>
                         <field id="same">0</field>
                         <field id="auth_type">token</field>
@@ -619,8 +625,9 @@
                         <field id="auth_type">0</field>
                     </depends>
                 </field>
-                <field id="consumer_secret" translate="label" type="text" sortOrder="500" showInDefault="1" showInWebsite="0" showInStore="0">
+                <field id="consumer_secret" translate="label" type="obscure" sortOrder="500" showInDefault="1" showInWebsite="0" showInStore="0">
                     <label>Consumer secret</label>
+                    <backend_model>Magento\Config\Model\Config\Backend\Encrypted</backend_model>
                     <depends>
                         <field id="same">0</field>
                         <field id="auth_type">0</field>
@@ -633,8 +640,9 @@
                         <field id="auth_type">0</field>
                     </depends>
                 </field>
-                <field id="token_secret" translate="label" type="text" sortOrder="650" showInDefault="1" showInWebsite="0" showInStore="0">
+                <field id="token_secret" translate="label" type="obscure" sortOrder="650" showInDefault="1" showInWebsite="0" showInStore="0">
                     <label>Token secret</label>
+                    <backend_model>Magento\Config\Model\Config\Backend\Encrypted</backend_model>
                     <depends>
                         <field id="same">0</field>
                         <field id="auth_type">0</field>

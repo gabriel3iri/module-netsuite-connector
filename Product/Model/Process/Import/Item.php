@@ -76,6 +76,29 @@ class Item extends AbstractImportProcessor
     protected bool $extraLoadRecordOnImport = false;
 
     /**
+     * @var \NetSuite\Classes\SearchResponse|\NetSuite\Classes\SearchMoreWithIdResponse|null
+     */
+    private $response;
+
+    /**
+     * @var string|null
+     */
+    private $searchId;
+
+    /**
+     * @var int|null
+     */
+    private $totalPages;
+
+    /**
+     * current page to start from for 2 iteration is used only for cases when we start not from the
+     * beginning.
+     *
+     * @var int
+     */
+    private $currentPage = 2;
+
+    /**
      * @param \MageOS\NetSuiteConnector\Product\Model\Import\Item\Mapper $mapper
      * @param \MageOS\NetSuiteConnector\Product\Model\ConfigProvider\Permissions $permissionHelper
      * @param \MageOS\NetSuiteConnector\Product\Model\Prefetch\ProcessingItem $prefetchProcessingItem
@@ -217,11 +240,6 @@ class Item extends AbstractImportProcessor
      */
     public function queryNetsuite($startDateTime, $fromBeginning = true)
     {
-        static $response = null;
-        static $searchId = null;
-        static $totalPages = null;
-        //current page to start from for 2 iteration is used only for cases when we start not from the beginning.
-        static $currentPage = 2;
         /*
          * check that it is first call and try to retrieve the previous searchId and page number,
          * if they exists we going to start with last success page
@@ -233,9 +251,9 @@ class Item extends AbstractImportProcessor
                 && !empty($searchInfo['totalPages'])
             ) {
                 $fromBeginning = false;
-                $searchId = $searchInfo['searchId'];
-                $currentPage = $searchInfo['pageNumber'];
-                $totalPages = $searchInfo['totalPages'];
+                $this->searchId = $searchInfo['searchId'];
+                $this->currentPage = $searchInfo['pageNumber'];
+                $this->totalPages = $searchInfo['totalPages'];
             }
         }
 
@@ -249,27 +267,32 @@ class Item extends AbstractImportProcessor
 
         if ($fromBeginning) {
             $searchRequest = $this->getNetsuiteRequest($this->getRecordType(), $startDateTime);
-            $response = $netsuiteService->search($searchRequest);
-            if ($response->searchResult->status->isSuccess) {
-                $totalPages = $response->searchResult->totalPages;
-                $searchId = $response->searchResult->searchId;
-                return $response->searchResult->recordList->record;
+            $this->response = $netsuiteService->search($searchRequest);
+            if ($this->response->searchResult->status->isSuccess) {
+                $this->totalPages = $this->response->searchResult->totalPages;
+                $this->searchId = $this->response->searchResult->searchId;
+                $this->currentPage = 2;
+                return $this->response->searchResult->recordList->record;
             }
             // phpcs:ignore
-            throw new \RuntimeException((string)print_r($response->searchResult->status->statusDetail, true));
+            throw new \RuntimeException((string)print_r($this->response->searchResult->status->statusDetail, true));
         }
-        if ($currentPage > $totalPages) {
+        if ($this->currentPage > $this->totalPages) {
             $this->deleteFile();
             return false;
         }
         $searchMoreRequest = new SearchMoreWithIdRequest();
-        $searchMoreRequest->pageIndex = $currentPage;
-        $searchMoreRequest->searchId = $searchId;
+        $searchMoreRequest->pageIndex = $this->currentPage;
+        $searchMoreRequest->searchId = $this->searchId;
 
         $searchResponse = $netsuiteService->searchMoreWithId($searchMoreRequest);
-        $currentPage++;
+        $this->currentPage++;
         if ($searchResponse->searchResult->status->isSuccess) {
-            $this->saveCurrentSearchIdAndPage((string)$searchId, (string)$currentPage, (string)$totalPages);
+            $this->saveCurrentSearchIdAndPage(
+                (string)$this->searchId,
+                (string)$this->currentPage,
+                (string)$this->totalPages
+            );
             return $searchResponse->searchResult->recordList->record;
         }
         $this->deleteFile();

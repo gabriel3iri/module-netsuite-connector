@@ -32,6 +32,7 @@
         <settings>
             <submitUrl path="*/*/save"/>
         </settings>
+        <aclResource>MageOS_NetSuiteConnector::netsuite</aclResource>
         <dataProvider class="MageOS\NetSuiteConnector\Core\Ui\DataProvider\Monitor\Form\FormDataProvider" name="item_form_data_source">
             <settings>
                 <requestFieldName>id</requestFieldName>

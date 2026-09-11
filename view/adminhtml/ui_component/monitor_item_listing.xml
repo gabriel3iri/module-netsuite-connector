@@ -27,6 +27,7 @@
                 <item name="component" xsi:type="string">Magento_Ui/js/grid/provider</item>
             </item>
         </argument>
+        <aclResource>MageOS_NetSuiteConnector::netsuite</aclResource>
     </dataSource>
     <listingToolbar name="listing_top">
         <bookmark name="bookmarks"/>

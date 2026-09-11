@@ -22,8 +22,9 @@ installed Rocket Web package.
 
 This is a new module identity prepared for Mage-OS Lab. Existing Rocket Web installations are not
 migrated automatically. There is no upgrade path from the `rocketweb/netsuite-connector-*`
-packages, and the Composer manifest declares `replace` entries for all seventeen of them so a mixed
-installation is refused rather than half-applied.
+packages, and the Composer manifest declares `conflict` entries for all seventeen of them, so
+Composer refuses to install this package next to the Rocket Web packages rather than allowing a
+mixed, half-applied installation.
 
 Configuration paths moved from `rocketweb_netsuite/*` to `mageos_netsuite/*` and tables are now
 prefixed `mageos_netsuite_`, so settings and mappings must be entered again on a store that

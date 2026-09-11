@@ -29,16 +29,6 @@ use Magento\Sales\Api\Data\ShipmentInterface;
 class ShipmentRegistry
 {
     /**
-     * @var \Magento\Sales\Api\ShipmentRepositoryInterface
-     */
-    private $shipmentRepository;
-
-    /**
-     * @var \Magento\Framework\Api\SearchCriteriaBuilder
-     */
-    private $searchCriteriaBuilder;
-
-    /**
      * @var array
      */
     private $shipmentCache = [];
@@ -46,34 +36,48 @@ class ShipmentRegistry
     /**
      * @param \Magento\Sales\Api\ShipmentRepositoryInterface $shipmentRepository
      * @param \Magento\Framework\Api\SearchCriteriaBuilder $searchCriteriaBuilder
+     * @param \Magento\InventoryShipping\Model\ResourceModel\ShipmentSource\GetSourceCodeByShipmentId $getSourceCodeByShipmentId
      */
     public function __construct(
-        \Magento\Sales\Api\ShipmentRepositoryInterface $shipmentRepository,
-        \Magento\Framework\Api\SearchCriteriaBuilder $searchCriteriaBuilder
+        private readonly \Magento\Sales\Api\ShipmentRepositoryInterface $shipmentRepository,
+        private readonly \Magento\Framework\Api\SearchCriteriaBuilder $searchCriteriaBuilder,
+        private readonly \Magento\InventoryShipping\Model\ResourceModel\ShipmentSource\GetSourceCodeByShipmentId $getSourceCodeByShipmentId
     ) {
-        $this->shipmentRepository = $shipmentRepository;
-        $this->searchCriteriaBuilder = $searchCriteriaBuilder;
     }
 
     /**
-     * Load magento shipment based on NS internal ID
+     * Load magento shipment based on NS internal ID, and, in multi source mode, on the Magento source code that
+     * the shipment was created for. With no source code the lookup matches on the NetSuite ID alone, exactly as
+     * single source mode has always done.
      *
      * @param int $internalNetSuiteId
+     * @param string|null $sourceCode
      * @return ShipmentInterface|null
      */
-    public function getShipmentByNetsuiteId($internalNetSuiteId)
+    public function getShipmentByNetsuiteId($internalNetSuiteId, ?string $sourceCode = null)
     {
-        if (isset($this->shipmentCache[$internalNetSuiteId])) {
-            return $this->shipmentCache[$internalNetSuiteId];
+        $cacheKey = $sourceCode === null ? $internalNetSuiteId : $internalNetSuiteId . ':' . $sourceCode;
+        if (isset($this->shipmentCache[$cacheKey])) {
+            return $this->shipmentCache[$cacheKey];
         }
 
         $this->searchCriteriaBuilder->addFilter('netsuite_internal_id', $internalNetSuiteId);
         $searchCriteria = $this->searchCriteriaBuilder->create();
         $shipments = $this->shipmentRepository->getList($searchCriteria)->getItems();
 
-        if (\count($shipments)) {
-            $this->shipmentCache[$internalNetSuiteId] = array_pop($shipments);
-            return $this->shipmentCache[$internalNetSuiteId];
+        if ($sourceCode === null) {
+            if (\count($shipments)) {
+                $this->shipmentCache[$cacheKey] = array_pop($shipments);
+                return $this->shipmentCache[$cacheKey];
+            }
+            return null;
+        }
+
+        foreach ($shipments as $shipment) {
+            if ($this->getSourceCodeByShipmentId->execute((int)$shipment->getEntityId()) === $sourceCode) {
+                $this->shipmentCache[$cacheKey] = $shipment;
+                return $this->shipmentCache[$cacheKey];
+            }
         }
 
         return null;

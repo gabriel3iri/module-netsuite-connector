@@ -40,8 +40,11 @@ class ExecuteButton implements ButtonProviderInterface
 
     public function getButtonData(): array
     {
-        /** @var MonitorItemInterface $monitorItem */
+        /** @var MonitorItemInterface|null $monitorItem */
         $monitorItem = $this->moduleRegistry->registry('current_monitor_item');
+        if ($monitorItem === null) {
+            return [];
+        }
 
         if (!$monitorItem->hasStatus(Status::ERROR())) {
             return [];

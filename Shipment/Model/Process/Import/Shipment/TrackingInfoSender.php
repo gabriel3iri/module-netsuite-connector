@@ -86,16 +86,20 @@ class TrackingInfoSender
 
     /**
      * @param Record $itemShipment
+     * @param ShipmentInterface $magentoShipping
      * @return bool
      */
-    public function isSentTrackingInformation(Record $itemShipment): bool
+    public function isSentTrackingInformation(Record $itemShipment, $magentoShipping): bool
     {
         /** @var ItemFulfillment $itemShipment */
         if (!$this->shippingConfig->getSendTrackingInformationOnImport()) {
             return false;
         }
 
-        $existingShipping = $this->shipmentRegistry->getShipmentByNetsuiteId($itemShipment->internalId);
+        $existingShipping = $this->shipmentRegistry->getShipmentByNetsuiteId(
+            $itemShipment->internalId,
+            $this->getSourceCode($magentoShipping)
+        );
         if ($existingShipping !== null) {
             $existingTrackingCodes = [];
             foreach ($existingShipping->getTracks() as $track) {
@@ -116,6 +120,21 @@ class TrackingInfoSender
             return true;
         }
         return false;
+    }
+
+    /**
+     * Read the source code that the multi source mapper set on the shipment, or null in single source mode
+     *
+     * @param ShipmentInterface $magentoShipping
+     * @return string|null
+     */
+    private function getSourceCode($magentoShipping): ?string
+    {
+        $extensionAttributes = $magentoShipping->getExtensionAttributes();
+        if ($extensionAttributes === null) {
+            return null;
+        }
+        return $extensionAttributes->getSourceCode();
     }
 
     /**

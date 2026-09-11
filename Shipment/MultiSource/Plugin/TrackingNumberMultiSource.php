@@ -82,11 +82,11 @@ class TrackingNumberMultiSource
          */
         foreach ($originalTrackingNumbers as $key => $originalTrackingNumber) {
             foreach ($trackingNumbers as $trackingNumber) {
-                if ($originalTrackingNumbers['number'] == $trackingNumber) {
+                if ($originalTrackingNumber['number'] == $trackingNumber) {
                     $result[] = $originalTrackingNumber;
                     unset($originalTrackingNumbers[$key]);
                 } else {
-                    $result[] = $result[] = ['number' => $trackingNumber, 'description' => ''];
+                    $result[] = ['number' => $trackingNumber, 'description' => ''];
                 }
             }
         }

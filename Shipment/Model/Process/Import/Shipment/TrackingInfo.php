@@ -71,15 +71,34 @@ class TrackingInfo
      * Remove tracking info from existing shipment
      *
      * @param Record $itemShipment
+     * @param ShipmentInterface $magentoShipping
      */
-    public function cleanUpExistingTracking($itemShipment):void
+    public function cleanUpExistingTracking($itemShipment, $magentoShipping):void
     {
-        $existingShipping = $this->shipmentRegistry->getShipmentByNetsuiteId($itemShipment->internalId);
+        $existingShipping = $this->shipmentRegistry->getShipmentByNetsuiteId(
+            $itemShipment->internalId,
+            $this->getSourceCode($magentoShipping)
+        );
         if ($existingShipping) {
             foreach ($existingShipping->getTracksCollection() as $track) {
                 $track->delete();
             }
         }
+    }
+
+    /**
+     * Read the source code that the multi source mapper set on the shipment, or null in single source mode
+     *
+     * @param ShipmentInterface $magentoShipping
+     * @return string|null
+     */
+    private function getSourceCode($magentoShipping): ?string
+    {
+        $extensionAttributes = $magentoShipping->getExtensionAttributes();
+        if ($extensionAttributes === null) {
+            return null;
+        }
+        return $extensionAttributes->getSourceCode();
     }
 
     /**

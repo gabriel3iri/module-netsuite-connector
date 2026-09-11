@@ -22,6 +22,9 @@ declare(strict_types=1);
 namespace MageOS\NetSuiteConnector\Order\Model\Process\Export;
 
 use NetSuite\Classes\AddRequest;
+use NetSuite\Classes\GetRequest;
+use NetSuite\Classes\RecordRef;
+use NetSuite\Classes\RecordType;
 use MageOS\NetSuiteConnector\Core\Api\Data\MessageInterface;
 use MageOS\NetSuiteConnector\Core\Exception\DataIntegrityException;
 use MageOS\NetSuiteConnector\Core\Model\NetSuite\ResponseValidator;
@@ -51,7 +54,8 @@ class OrderPlace extends AbstractExportProcessor
         \MageOS\NetSuiteConnector\Core\Registry\ModuleRegistry $registry,
         \MageOS\NetSuiteConnector\Order\Model\Mapper\Order $orderMapper,
         \Magento\Sales\Api\Data\OrderExtensionFactory $orderExtensionFactory,
-        \MageOS\NetSuiteConnector\Core\Api\MonitorManagementInterface $monitorManagement
+        \MageOS\NetSuiteConnector\Core\Api\MonitorManagementInterface $monitorManagement,
+        private readonly \Psr\Log\LoggerInterface $logger
     ) {
         $this->eventManager = $context->getEventDispatcher();
         $this->orderRepository = $orderRepository;
@@ -79,6 +83,16 @@ class OrderPlace extends AbstractExportProcessor
             throw new DataIntegrityException("Cannot load order with id #{$message->getItemId()} from Magento!");
         }
 
+        $existingExtension = $magentoOrder->getExtensionAttributes();
+        $existingNetsuiteId = $existingExtension ? $existingExtension->getNetsuiteInternalId() : null;
+        if ($existingNetsuiteId) {
+            $this->logger->info(
+                "Order #{$magentoOrder->getId()} already has NetSuite internal id "
+                . "{$existingNetsuiteId}, skipping export"
+            );
+            return;
+        }
+
         $netsuiteOrder = $this->orderMapper->getNetsuiteFormat($magentoOrder);
 
         $this->eventManager->dispatch(
@@ -100,18 +114,68 @@ class OrderPlace extends AbstractExportProcessor
         $request->record = $netsuiteOrder;
 
         $netsuiteService = $this->serviceManagement->get();
-        $response = $netsuiteService->add($request);
-        ResponseValidator::validate($response);
+
+        try {
+            $response = $netsuiteService->add($request);
+            ResponseValidator::validate($response);
+        } catch (\Exception $addException) {
+            $netsuiteId = $this->findExistingNetsuiteId($netsuiteService, $netsuiteOrder->externalId, $addException);
+            $this->saveNetsuiteId($magentoOrder, $netsuiteId);
+            return;
+        }
 
         $netsuiteId = $response->writeResponse->baseRef->internalId;
+        $this->saveNetsuiteId($magentoOrder, $netsuiteId);
 
+        $this->response = $response;
+    }
+
+    /**
+     * Look up a NetSuite sales order by the externalId this export sent, after add() failed.
+     * This covers the replay of a message whose add() previously succeeded in NetSuite but
+     * whose local order save failed, which would otherwise create a duplicate NetSuite order.
+     *
+     * @param \NetSuite\NetSuiteService $netsuiteService
+     * @param string|null $externalId
+     * @param \Exception $addException
+     * @return mixed
+     * @throws \Exception
+     */
+    private function findExistingNetsuiteId($netsuiteService, ?string $externalId, \Exception $addException)
+    {
+        if (!$externalId) {
+            throw $addException;
+        }
+
+        try {
+            $getRequest = new GetRequest();
+            $getRequest->baseRef = new RecordRef();
+            $getRequest->baseRef->externalId = $externalId;
+            $getRequest->baseRef->type = RecordType::salesOrder;
+
+            $getResponse = $netsuiteService->get($getRequest);
+            ResponseValidator::validate($getResponse);
+        } catch (\Exception) {
+            throw $addException;
+        }
+
+        return $getResponse->readResponse->record->internalId;
+    }
+
+    /**
+     * Store the NetSuite internal id on the Magento order
+     *
+     * @param \Magento\Sales\Api\Data\OrderInterface $magentoOrder
+     * @param mixed $netsuiteId
+     * @return void
+     */
+    private function saveNetsuiteId(\Magento\Sales\Api\Data\OrderInterface $magentoOrder, $netsuiteId): void
+    {
         $extension = $magentoOrder->getExtensionAttributes();
         if (!$extension) {
             $magentoOrder->setExtensionAttributes($this->orderExtensionFactory->create());
         }
         $magentoOrder->getExtensionAttributes()->setNetsuiteInternalId($netsuiteId);
         $this->orderRepository->save($magentoOrder);
-
-        $this->response = $response;
     }
 }

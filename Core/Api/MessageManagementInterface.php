@@ -26,6 +26,21 @@ interface MessageManagementInterface
 {
     public function getMessageById(int $messageId): MessageInterface;
 
+    /**
+     * Cancel the message with a single atomic UPDATE. Only a message that is still in_queue,
+     * retry or error is cancelled; an in_progress message is left untouched.
+     *
+     * @param int $messageId
+     * @return int Number of rows updated, 0 or 1.
+     */
+    public function cancelMessage(int $messageId): int;
+
+    /**
+     * @param int $messageId
+     * @return Status|null The current status, or null when the message no longer exists.
+     */
+    public function getMessageStatus(int $messageId): ?Status;
+
     public function deleteById(int $messageId): void;
 
     public function createMessage(

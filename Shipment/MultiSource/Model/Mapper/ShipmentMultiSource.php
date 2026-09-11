@@ -28,14 +28,6 @@ use MageOS\NetSuiteConnector\Core\Exception\SkipRecordException;
  */
 class ShipmentMultiSource implements \MageOS\NetSuiteConnector\Shipment\Model\Mapper\ShipmentInterface
 {
-    private \Magento\Sales\Api\Data\ShipmentInterfaceFactory $shipmentFactory;
-    private \MageOS\NetSuiteConnector\Order\Api\OrderRegistryInterface $orderRegistry;
-    private \MageOS\NetSuiteConnector\Customer\Model\Mapper\Customer $customerMapper;
-    private \Magento\Framework\DataObject\Copy $objectCopyService;
-    private \MageOS\NetSuiteConnector\Shipment\Model\Mapper\Shipment\Items $itemsMapper;
-    private \MageOS\NetSuiteConnector\Shipment\Model\Mapper\Shipment\Address $addressMapper;
-    private \MageOS\NetSuiteConnector\Shipment\MultiSource\Model\Mapper\ShipmentMultiSource\LocationGrouper $locationGrouper;
-
     /**
      * Shipment constructor.
      * @param \Magento\Sales\Api\Data\ShipmentInterfaceFactory $shipmentFactory
@@ -45,23 +37,18 @@ class ShipmentMultiSource implements \MageOS\NetSuiteConnector\Shipment\Model\Ma
      * @param \MageOS\NetSuiteConnector\Shipment\Model\Mapper\Shipment\Items $itemsMapper
      * @param \MageOS\NetSuiteConnector\Shipment\Model\Mapper\Shipment\Address $addressMapper
      * @param \MageOS\NetSuiteConnector\Shipment\MultiSource\Model\Mapper\ShipmentMultiSource\LocationGrouper $locationGrouper
+     * @param \Magento\Sales\Api\Data\ShipmentExtensionFactory $shipmentExtensionFactory
      */
     public function __construct(
-        \Magento\Sales\Api\Data\ShipmentInterfaceFactory $shipmentFactory,
-        \MageOS\NetSuiteConnector\Order\Api\OrderRegistryInterface $orderRegistry,
-        \MageOS\NetSuiteConnector\Customer\Model\Mapper\Customer $customerMapper,
-        \Magento\Framework\DataObject\Copy $objectCopyService,
-        \MageOS\NetSuiteConnector\Shipment\Model\Mapper\Shipment\Items $itemsMapper,
-        \MageOS\NetSuiteConnector\Shipment\Model\Mapper\Shipment\Address $addressMapper,
-        \MageOS\NetSuiteConnector\Shipment\MultiSource\Model\Mapper\ShipmentMultiSource\LocationGrouper $locationGrouper
+        private readonly \Magento\Sales\Api\Data\ShipmentInterfaceFactory $shipmentFactory,
+        private readonly \MageOS\NetSuiteConnector\Order\Api\OrderRegistryInterface $orderRegistry,
+        private readonly \MageOS\NetSuiteConnector\Customer\Model\Mapper\Customer $customerMapper,
+        private readonly \Magento\Framework\DataObject\Copy $objectCopyService,
+        private readonly \MageOS\NetSuiteConnector\Shipment\Model\Mapper\Shipment\Items $itemsMapper,
+        private readonly \MageOS\NetSuiteConnector\Shipment\Model\Mapper\Shipment\Address $addressMapper,
+        private readonly \MageOS\NetSuiteConnector\Shipment\MultiSource\Model\Mapper\ShipmentMultiSource\LocationGrouper $locationGrouper,
+        private readonly \Magento\Sales\Api\Data\ShipmentExtensionFactory $shipmentExtensionFactory
     ) {
-        $this->shipmentFactory = $shipmentFactory;
-        $this->orderRegistry = $orderRegistry;
-        $this->customerMapper = $customerMapper;
-        $this->objectCopyService = $objectCopyService;
-        $this->itemsMapper = $itemsMapper;
-        $this->addressMapper = $addressMapper;
-        $this->locationGrouper = $locationGrouper;
     }
 
     /**
@@ -93,7 +80,7 @@ class ShipmentMultiSource implements \MageOS\NetSuiteConnector\Shipment\Model\Ma
         /**
          * we group the items by locations cloning netsuite fulfillments and process each as separate shipment
          */
-        foreach ($this->locationGrouper->group($baseNetsuiteShipment) as $netsuiteShipment) {
+        foreach ($this->locationGrouper->group($baseNetsuiteShipment) as $sourceCode => $netsuiteShipment) {
             $magentoShipment = $this->shipmentFactory->create();
             $magentoShipment->setStoreId($magentoOrder->getStoreId());
             //we assume customer is not changed for shipping
@@ -115,8 +102,25 @@ class ShipmentMultiSource implements \MageOS\NetSuiteConnector\Shipment\Model\Ma
             $magentoShipment->setShippingAddressId($magentoShippingAddress->getEntityId());
             $magentoShipment->setOrderId($magentoOrder->getEntityId());
             $this->itemsMapper->addItems($netsuiteShipment, $magentoShipment, $magentoOrder);
+            $this->setSourceCode($magentoShipment, $sourceCode);
             $shipments[] = $magentoShipment;
         }
         return $shipments;
+    }
+
+    /**
+     * Set the matched Magento source code on the shipment, so InventoryShipping can deduct from that source
+     *
+     * @param \Magento\Sales\Api\Data\ShipmentInterface $magentoShipment
+     * @param string $sourceCode
+     */
+    private function setSourceCode(\Magento\Sales\Api\Data\ShipmentInterface $magentoShipment, string $sourceCode): void
+    {
+        $shipmentExtension = $magentoShipment->getExtensionAttributes();
+        if ($shipmentExtension === null) {
+            $shipmentExtension = $this->shipmentExtensionFactory->create();
+        }
+        $shipmentExtension->setSourceCode($sourceCode);
+        $magentoShipment->setExtensionAttributes($shipmentExtension);
     }
 }

@@ -21,16 +21,24 @@ namespace MageOS\NetSuiteConnector\Core\Ui\DataProvider\Monitor;
 
 class ListingDataProvider extends \Magento\Framework\View\Element\UiComponent\DataProvider\DataProvider
 {
+    private const ORIGINAL_VALUE_FIELDS = ['process', 'entity', 'item_id', 'status'];
+    private const EXCLUDED_FIELDS = ['payload', 'process_output'];
+
     /**
-     * Adding an "_original" copy of values so they can be used if needed
+     * Adding an "_original" copy of the fields the grid columns need, and dropping fields the grid does not show
      */
     public function getData()
     {
         $data = parent::getData();
         foreach ($data['items'] as &$item) {
-            $keys = array_keys($item);
-            foreach ($keys as $key) {
-                $item[$key . '_original'] = $item[$key];
+            foreach (self::ORIGINAL_VALUE_FIELDS as $field) {
+                if (array_key_exists($field, $item)) {
+                    $item[$field . '_original'] = $item[$field];
+                }
+            }
+
+            foreach (self::EXCLUDED_FIELDS as $field) {
+                unset($item[$field]);
             }
         }
 

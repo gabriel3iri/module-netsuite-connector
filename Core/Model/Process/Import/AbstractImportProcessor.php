@@ -61,6 +61,16 @@ abstract class AbstractImportProcessor implements ImportProcessorInterface
 
     protected bool $extraLoadRecordOnImport = true;
 
+    /**
+     * @var \NetSuite\Classes\SearchResponse|\NetSuite\Classes\SearchMoreWithIdResponse|null
+     */
+    private $response;
+
+    /**
+     * @var int
+     */
+    private $currentPage = 2;
+
     public function __construct(
         \MageOS\NetSuiteConnector\Core\Model\Config\PermissionsConfigInterface $permissionHelper,
         \Magento\Framework\Model\Context $context,
@@ -109,9 +119,6 @@ abstract class AbstractImportProcessor implements ImportProcessorInterface
     //queries Netsuite for latest modified entries (shipments, invoices etc)
     public function queryNetsuite($startDateTime, $fromBeginning = true)
     {
-        static $response = null;
-        static $currentPage = 2;
-
         /**
          * TODO: why do we have this check here?
          * upd. import processors does not check it. may we could move it to Process class
@@ -126,9 +133,9 @@ abstract class AbstractImportProcessor implements ImportProcessorInterface
 
         if ($fromBeginning) {
             $searchRequest = $this->getNetsuiteRequest($this->getRecordType(), $startDateTime);
-            $response = $netsuiteService->search($searchRequest);
+            $this->response = $netsuiteService->search($searchRequest);
             try {
-                ResponseValidator::validate($response);
+                ResponseValidator::validate($this->response);
             } catch (DataIntegrityException $e) {
                 $message = sprintf(
                     'NetSuite Response for RecordType %s returned: %s',
@@ -138,23 +145,24 @@ abstract class AbstractImportProcessor implements ImportProcessorInterface
                 throw new DataIntegrityException($message);
             }
 
-            return $response->searchResult->recordList->record;
+            $this->currentPage = 2;
+            return $this->response->searchResult->recordList->record;
         }
 
-        $totalPages = $response->searchResult->totalPages;
-        $searchId = $response->searchResult->searchId;
+        $totalPages = $this->response->searchResult->totalPages;
+        $searchId = $this->response->searchResult->searchId;
 
-        if ($currentPage > $totalPages) {
+        if ($this->currentPage > $totalPages) {
             return false;
         }
 
         $searchMoreRequest = new SearchMoreWithIdRequest();
-        $searchMoreRequest->pageIndex = $currentPage;
+        $searchMoreRequest->pageIndex = $this->currentPage;
         $searchMoreRequest->searchId = $searchId;
 
         $searchResponse = $netsuiteService->searchMoreWithId($searchMoreRequest);
         ResponseValidator::validate($searchResponse);
-        $currentPage++;
+        $this->currentPage++;
         return $searchResponse->searchResult->recordList->record;
     }
 

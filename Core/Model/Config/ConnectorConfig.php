@@ -46,9 +46,11 @@ class ConnectorConfig
     /**
      * @param ScopeConfigInterface $scopeConfig
      * @param Registry $registry
+     * @param \Magento\Framework\Encryption\EncryptorInterface $encryptor
      */
     public function __construct(
-        ScopeConfigInterface $scopeConfig
+        ScopeConfigInterface $scopeConfig,
+        private readonly \Magento\Framework\Encryption\EncryptorInterface $encryptor
     ) {
         $this->scopeConfig = $scopeConfig;
         $this->cache = [];
@@ -148,8 +150,10 @@ class ConnectorConfig
      */
     public function getConsumerSecret(string $runMode)
     {
-        return $this->getCached(
-            sprintf(self::PATH_CONSUMER_SECRET, $this->getSystemConfigPathForRunMode($runMode))
+        return $this->encryptor->decrypt(
+            (string)$this->getCached(
+                sprintf(self::PATH_CONSUMER_SECRET, $this->getSystemConfigPathForRunMode($runMode))
+            )
         );
     }
 
@@ -172,8 +176,10 @@ class ConnectorConfig
      */
     public function getTokenSecret(string $runMode)
     {
-        return $this->getCached(
-            sprintf(self::PATH_TOKEN_SECRET, $this->getSystemConfigPathForRunMode($runMode))
+        return $this->encryptor->decrypt(
+            (string)$this->getCached(
+                sprintf(self::PATH_TOKEN_SECRET, $this->getSystemConfigPathForRunMode($runMode))
+            )
         );
     }
 

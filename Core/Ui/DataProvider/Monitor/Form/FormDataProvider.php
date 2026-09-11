@@ -28,12 +28,14 @@ class FormDataProvider extends \Magento\Ui\DataProvider\AbstractDataProvider
     private \MageOS\NetSuiteConnector\Core\Model\Config\MonitorConfig $monitorConfig;
     private \Magento\Framework\Stdlib\DateTime\Timezone $timezone;
     private \MageOS\NetSuiteConnector\Core\Model\Monitor\Data\Source\Entity $entitySource;
+    private readonly \Magento\Framework\Escaper $escaper;
 
     public function __construct(
         \Magento\Framework\Stdlib\DateTime\Timezone $timezone,
         \MageOS\NetSuiteConnector\Core\Model\Config\MonitorConfig $monitorConfig,
         \MageOS\NetSuiteConnector\Core\Model\Monitor\Data\Source\Entity $entitySource,
         \MageOS\NetSuiteConnector\Core\Api\MonitorItemCollectionInterfaceFactory $monitorItemCollectionFactory,
+        \Magento\Framework\Escaper $escaper,
         $name,
         $primaryFieldName,
         $requestFieldName,
@@ -45,6 +47,7 @@ class FormDataProvider extends \Magento\Ui\DataProvider\AbstractDataProvider
         $this->monitorConfig = $monitorConfig;
         $this->timezone = $timezone;
         $this->entitySource = $entitySource;
+        $this->escaper = $escaper;
     }
 
     public function getData()
@@ -162,7 +165,7 @@ class FormDataProvider extends \Magento\Ui\DataProvider\AbstractDataProvider
                 \IntlDateFormatter::MEDIUM,
                 \IntlDateFormatter::MEDIUM
             );
-            $output[] = sprintf('<b>%s</b>: %s', $timestamp, $message);
+            $output[] = sprintf('<b>%s</b>: %s', $timestamp, nl2br($this->escaper->escapeHtml($message)));
         }
 
         return implode('<br />', $output);

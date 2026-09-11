@@ -165,6 +165,21 @@ class MessageManagement implements MessageManagementInterface
         }
     }
 
+    public function cancelMessage(int $messageId): int
+    {
+        return $this->messageResource->cancelMessage($messageId);
+    }
+
+    public function getMessageStatus(int $messageId): ?Status
+    {
+        $data = $this->messageResource->getMessage(['message_id' => $messageId]);
+        if ($data === null) {
+            return null;
+        }
+
+        return new Status($data['status']);
+    }
+
     public function getStuckMessages(): array
     {
         $interval = $this->queueConfig->getDeleteExistingItemsInImportQueueHours();

@@ -7,6 +7,7 @@
 // @codingStandardsIgnoreFile
 
 $prefix = $block->getData('prefix');
+$group = $block->getData('group');
 ?>
 
 <script>
@@ -21,7 +22,8 @@ $prefix = $block->getData('prefix');
                     consumer_key: $('<?php echo $prefix?>_consumer_key').value,
                     consumer_secret: $('<?php echo $prefix?>_consumer_secret').value,
                     token_id: $('<?php echo $prefix?>_token_id').value,
-                    token_secret: $('<?php echo $prefix?>_token_secret').value
+                    token_secret: $('<?php echo $prefix?>_token_secret').value,
+                    group: '<?php echo $group?>'
                 };
             new Ajax.Request('<?php /* @escapeNotVerified */ echo $block->getAjaxUrl() ?>', {
                 parameters: params,

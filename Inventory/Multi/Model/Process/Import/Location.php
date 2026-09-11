@@ -58,7 +58,7 @@ class Location extends AbstractImportProcessor
         \MageOS\NetSuiteConnector\Inventory\Multi\Model\MagentoSourceRepository $magentoSourceRepository,
         \Magento\InventoryApi\Api\Data\SourceInterfaceFactory $sourceInterfaceFactory
     ) {
-        parent::__construct($permissionHelper, $context, null, $serviceManagement);
+        parent::__construct($permissionHelper, $context, $serviceManagement);
         $this->permissions = $permissions;
         $this->magentoSourceRepository = $magentoSourceRepository;
         $this->sourceInterfaceFactory = $sourceInterfaceFactory;

@@ -199,11 +199,11 @@ class Shipment extends AbstractImportProcessor
      */
     public function process(Record $itemShipment)
     {
-        $sentTrackingInformation = $this->trackingInfoSender->isSentTrackingInformation($itemShipment);
         $magentoShippings = $this->shipmentMapper->getMagentoFormat($itemShipment);
-        // it is important to check tracking information before the cleanup, because existing tracking information
-        // will be removed from existing shipment
         foreach ($magentoShippings as $shipping) {
+            // it is important to check tracking information before the cleanup, because existing tracking
+            // information will be removed from existing shipment
+            $sentTrackingInformation = $this->trackingInfoSender->isSentTrackingInformation($itemShipment, $shipping);
             $this->cleanUpManager->prepare($itemShipment, $shipping);
 
             if ((!$shipping->getEntityId() || null !== $shipping->getItems())

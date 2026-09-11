@@ -27,34 +27,16 @@ use NetSuite\Classes\Record;
 class CleanUpManager
 {
     /**
-     * @var \Magento\Sales\Api\Data\ShipmentExtensionFactory
-     */
-    private $shipmentExtensionFactory;
-
-    /**
-     * @var \MageOS\NetSuiteConnector\Shipment\Model\ShipmentRegistry
-     */
-    private $shipmentRegistry;
-
-    /**
-     * @var \MageOS\NetSuiteConnector\Shipment\Model\Process\Import\Shipment\TrackingInfo
-     */
-    private $trackingInfo;
-
-    /**
      * CleanUpManager constructor.
      * @param \Magento\Sales\Api\Data\ShipmentExtensionFactory $shipmentExtensionFactory
      * @param \MageOS\NetSuiteConnector\Shipment\Model\ShipmentRegistry $shipmentRegistry
      * @param TrackingInfo $trackingInfo
      */
     public function __construct(
-        \Magento\Sales\Api\Data\ShipmentExtensionFactory $shipmentExtensionFactory,
-        \MageOS\NetSuiteConnector\Shipment\Model\ShipmentRegistry $shipmentRegistry,
-        \MageOS\NetSuiteConnector\Shipment\Model\Process\Import\Shipment\TrackingInfo $trackingInfo
+        private readonly \Magento\Sales\Api\Data\ShipmentExtensionFactory $shipmentExtensionFactory,
+        private readonly \MageOS\NetSuiteConnector\Shipment\Model\ShipmentRegistry $shipmentRegistry,
+        private readonly \MageOS\NetSuiteConnector\Shipment\Model\Process\Import\Shipment\TrackingInfo $trackingInfo
     ) {
-        $this->shipmentExtensionFactory = $shipmentExtensionFactory;
-        $this->shipmentRegistry = $shipmentRegistry;
-        $this->trackingInfo = $trackingInfo;
     }
 
     /**
@@ -67,7 +49,7 @@ class CleanUpManager
         // will be removed from existing shipment
 
         $this->cleanUpExistingShipment($itemShipment, $magentoShipping);
-        $this->trackingInfo->cleanUpExistingTracking($itemShipment);
+        $this->trackingInfo->cleanUpExistingTracking($itemShipment, $magentoShipping);
         $this->addNSLastImportDateAndId($itemShipment, $magentoShipping);
 
         if (!$magentoShipping->getCommentsCollection()->count()) {
@@ -88,13 +70,31 @@ class CleanUpManager
      */
     private function cleanUpExistingShipment($itemShipment, $magentoShipping):void
     {
-        $existingShipping = $this->shipmentRegistry->getShipmentByNetsuiteId($itemShipment->internalId);
+        $existingShipping = $this->shipmentRegistry->getShipmentByNetsuiteId(
+            $itemShipment->internalId,
+            $this->getSourceCode($magentoShipping)
+        );
         if ($existingShipping) {
             foreach ($existingShipping->getAllItems() as $item) {
                 $item->delete();
             }
             $magentoShipping->setId($existingShipping->getId());
         }
+    }
+
+    /**
+     * Read the source code that the multi source mapper set on the shipment, or null in single source mode
+     *
+     * @param ShipmentInterface $magentoShipping
+     * @return string|null
+     */
+    private function getSourceCode($magentoShipping): ?string
+    {
+        $extensionAttributes = $magentoShipping->getExtensionAttributes();
+        if ($extensionAttributes === null) {
+            return null;
+        }
+        return $extensionAttributes->getSourceCode();
     }
 
     /**

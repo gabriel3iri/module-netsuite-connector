@@ -43,7 +43,8 @@ class LocationGrouper
     }
 
     /**
-     * returns an array of the cloned fulfillment each of the fulfillment contains all items from same location
+     * returns an array of the cloned fulfillment each of the fulfillment contains all items from same location,
+     * keyed by the matched Magento source code
      * @param Record $baseNetsuiteShipment
      * @return \Generator
      * @throws ConnectorRuntimeException
@@ -51,19 +52,17 @@ class LocationGrouper
     public function group(Record $baseNetsuiteShipment): \Generator
     {
         $itemsGroups = [];
-        foreach ($baseNetsuiteShipment->itemList->item as $key => $netsuiteShipmentItem) {
-            $locationId = $this->magentoSourceRepository
+        $sourceCodes = [];
+        foreach ($baseNetsuiteShipment->itemList->item as $netsuiteShipmentItem) {
+            $magentoSource = $this->magentoSourceRepository
                 ->getSourceByNetSuiteData((int)$netsuiteShipmentItem->location->internalId, null);
             //we ignore items with locations that is not mapped
-            if (null === $locationId) {
-                unset($baseNetsuiteShipment->itemList->item[$key]);
+            if (null === $magentoSource) {
                 continue;
             }
-            if (!isset($itemsGroups[$netsuiteShipmentItem->location->internalId])) {
-                $itemsGroups[$netsuiteShipmentItem->location->internalId] = [];
-            }
-            $itemsGroups[$netsuiteShipmentItem->location->internalId][] = $baseNetsuiteShipment->itemList->item[$key];
-            unset($baseNetsuiteShipment->itemList->item[$key]);
+            $locationId = $netsuiteShipmentItem->location->internalId;
+            $itemsGroups[$locationId][] = $netsuiteShipmentItem;
+            $sourceCodes[$locationId] = $magentoSource->getSourceCode();
         }
         if (empty($itemsGroups)) {
             throw new ConnectorRuntimeException(
@@ -71,9 +70,11 @@ class LocationGrouper
             );
         }
         //for each item group we create separate fulfillment that will contain only items with same location
-        foreach ($itemsGroups as $key => $itemsGroup) {
-            $baseNetsuiteShipment->itemList->item = $itemsGroup;
-            yield $baseNetsuiteShipment->itemList->item;
+        foreach ($itemsGroups as $locationId => $itemsGroup) {
+            $groupedFulfillment = clone $baseNetsuiteShipment;
+            $groupedFulfillment->itemList = clone $baseNetsuiteShipment->itemList;
+            $groupedFulfillment->itemList->item = $itemsGroup;
+            yield $sourceCodes[$locationId] => $groupedFulfillment;
         }
     }
 }

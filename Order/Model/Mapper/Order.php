@@ -93,7 +93,24 @@ class Order
         $this->nsPayment->addPayment($netsuiteOrder, $magentoOrder);
         $this->nsCustomFields->addCustomFields($netsuiteOrder, $magentoOrder);
         $this->nsLocation->addLocation($netsuiteOrder);
+
+        if (empty($netsuiteOrder->externalId)) {
+            $netsuiteOrder->externalId = $this->buildExternalId($magentoOrder);
+        }
+
         return $netsuiteOrder;
+    }
+
+    /**
+     * Build the externalId this export sends to NetSuite, so a replay of the same Magento order
+     * can be matched back to a record NetSuite already created.
+     *
+     * @param OrderInterface $magentoOrder
+     * @return string
+     */
+    private function buildExternalId(OrderInterface $magentoOrder): string
+    {
+        return $magentoOrder->getIncrementId() . '_' . $magentoOrder->getStoreId();
     }
 
     /**

@@ -54,12 +54,15 @@ class TestConnection extends \Magento\Config\Block\System\Config\Form\Field
     {
         $originalData = $element->getOriginalData();
         $buttonLabel =$originalData['button_label'];
+        $groupPath = (string)$element->getOriginalData('path');
+        $groupPathParts = explode('/', $groupPath);
         $this->addData(
             [
                 'button_label' => __($buttonLabel),
                 'html_id' => $element->getHtmlId(),
                 'ajax_url' => $this->_urlBuilder->getUrl('netsuite/system_config_connection/validate'),
-                'prefix' =>  str_replace('/', '_', $element->getOriginalData('path'))
+                'prefix' =>  str_replace('/', '_', $groupPath),
+                'group' => end($groupPathParts)
             ]
         );
 

@@ -55,6 +55,17 @@ class Message extends \Magento\Framework\Model\ResourceModel\Db\AbstractDb
         return $connection->fetchAll($select);
     }
 
+    public function countMessages(string $queue): int
+    {
+        $connection = $this->getConnection();
+        $select = $connection->select()
+            ->from(['mageos_netsuite_message' => $this->getMessageTable()], ['count' => new \Zend_Db_Expr('COUNT(*)')])
+            ->where('queue = ?', $queue)
+            ->where('status IN (?)', [(string)Status::IN_QUEUE(), Status::RETRY()]);
+
+        return (int)$connection->fetchOne($select);
+    }
+
     public function getMessage(array $conditions): ?array
     {
         $connection = $this->getConnection();
@@ -97,6 +108,25 @@ class Message extends \Magento\Framework\Model\ResourceModel\Db\AbstractDb
             $this->getMessageTable(),
             $update,
             ['message_id IN (?)' => $messageIds]
+        );
+    }
+
+    /**
+     * Cancel one message with a single atomic UPDATE. Only a message that is still in_queue,
+     * retry or error can be cancelled, so an in_progress message is left untouched.
+     *
+     * @param int $messageId
+     * @return int Number of rows updated, 0 or 1.
+     */
+    public function cancelMessage(int $messageId): int
+    {
+        return $this->getConnection()->update(
+            $this->getMessageTable(),
+            ['status' => (string)Status::CANCELLED()],
+            [
+                'message_id = ?' => $messageId,
+                'status IN (?)' => [(string)Status::IN_QUEUE(), (string)Status::RETRY(), (string)Status::ERROR()]
+            ]
         );
     }
 

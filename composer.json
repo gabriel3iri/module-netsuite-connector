@@ -22,7 +22,9 @@
         "ryanwinchester/netsuite-php": "^2024.2"
     },
     "replace": {
-        "paragonie/random_compat": "*",
+        "paragonie/random_compat": "*"
+    },
+    "conflict": {
         "rocketweb/netsuite-connector": "*",
         "rocketweb/netsuite-connector-customer": "*",
         "rocketweb/netsuite-connector-customer-import": "*",
@@ -39,8 +41,7 @@
         "rocketweb/netsuite-connector-shipment": "*",
         "rocketweb/netsuite-connector-shipment-multi-source": "*",
         "rocketweb/netsuite-connector-shipment-single-source": "*",
-        "rocketweb/netsuite-connector-tax": "*",
-        "weew/helpers-array": "*"
+        "rocketweb/netsuite-connector-tax": "*"
     },
     "autoload": {
         "files": [
