@@ -27,85 +27,53 @@ use Magento\Sales\Api\Data\OrderItemInterface;
 use NetSuite\Classes\RecordRef;
 use NetSuite\Classes\SalesOrder;
 use NetSuite\Classes\SalesOrderItem;
-use MageOS\NetSuiteConnector\Tax\Model\Order\Export\TaxManagerInterface;
+use MageOS\NetSuiteConnector\Order\Model\Export\OrderItemProcessorInterface;
+use MageOS\NetSuiteConnector\Order\Model\Export\OrderProcessorInterface;
+use MageOS\NetSuiteConnector\Tax\Model\Config\Source\Tax as TaxLogic;
 
-/**
- * TaxItemLine - tax manager that implements next logic for tax handling:
- * # taxes are calculated on the Magento side
- * # connector collects tax total
- * # adds special TaxItem line to the Sales Order Item List with the tax total of the Magento Order
- *
- * legacy logic coupling between objects suppressing
- * @SuppressWarnings(PHPMD)
- */
-class TaxItemLine implements TaxManagerInterface
+class TaxItemLine implements OrderProcessorInterface, OrderItemProcessorInterface
 {
     private const ITEM_DESCRIPTION = 'Sales tax';
 
-    /**
-     * @var \MageOS\NetSuiteConnector\Tax\Model\Config\Tax
-     */
-    private $taxConfig;
-    /**
-     * @var \Magento\Framework\Event\ManagerInterface
-     */
-    private $eventManager;
-    /**
-     * @var \MageOS\NetSuiteConnector\Order\Model\Mapper\OrderExport\OrderItemList
-     */
-    private $netSuiteOrderItemList;
+    /** @var \WeakMap<SalesOrder, float> */
+    private readonly \WeakMap $collectedItemTax;
 
-    /**
-     * @var float
-     */
-    private $taxAmount = 0.0;
-    /**
-     * @var \MageOS\NetSuiteConnector\Tax\Model\Order\Export\TaxManager\TaxCalculation\TaxPerItem
-     */
-    private $taxPerItem;
-
-    /**
-     * @param \MageOS\NetSuiteConnector\Tax\Model\Config\Tax $taxConfig
-     * @param \Magento\Framework\Event\ManagerInterface $eventManager
-     * @param \MageOS\NetSuiteConnector\Order\Model\Mapper\OrderExport\OrderItemList $netSuiteOrderItemList
-     * @param \MageOS\NetSuiteConnector\Tax\Model\Order\Export\TaxManager\TaxCalculation\TaxPerItem $taxPerItem
-     */
     public function __construct(
-        \MageOS\NetSuiteConnector\Tax\Model\Config\Tax $taxConfig,
-        \Magento\Framework\Event\ManagerInterface $eventManager,
-        \MageOS\NetSuiteConnector\Order\Model\Mapper\OrderExport\OrderItemList $netSuiteOrderItemList,
-        \MageOS\NetSuiteConnector\Tax\Model\Order\Export\TaxManager\TaxCalculation\TaxPerItem $taxPerItem,
+        private readonly \MageOS\NetSuiteConnector\Tax\Model\Config\Tax $taxConfig,
+        private readonly \Magento\Framework\Event\ManagerInterface $eventManager,
+        private readonly \MageOS\NetSuiteConnector\Order\Model\Mapper\OrderExport\OrderItemList $netSuiteOrderItemList,
+        private readonly \MageOS\NetSuiteConnector\Tax\Model\Order\Export\TaxManager\TaxCalculation\TaxPerItem $taxPerItem,
         private readonly \MageOS\NetSuiteConnector\Order\Model\Mapper\OrderExport\Location $nsLocation
     ) {
-
-        $this->taxConfig = $taxConfig;
-        $this->eventManager = $eventManager;
-        $this->netSuiteOrderItemList = $netSuiteOrderItemList;
-        $this->taxPerItem = $taxPerItem;
+        $this->collectedItemTax = new \WeakMap();
     }
 
-    /**
-     * @inheritDoc
-     * @SuppressWarnings("unused")
-     */
-    public function collectOrderItemTax(
-        OrderItemInterface $item,
+    public function processItem(
+        SalesOrder $netsuiteOrder,
+        SalesOrderItem $netsuiteItem,
+        OrderItemInterface $magentoItem,
         ProductInterface $product,
-        SalesOrderItem $netsuiteOrderItem
+        OrderInterface $magentoOrder
     ): void {
-        $this->taxAmount += $this->taxPerItem->getTaxAmount($item, $product);
+        if (!$this->taxConfig->isTaxLogicActive(TaxLogic::TAX_HANDLING_TAX_ITEM, 'order_export')) {
+            return;
+        }
+        $this->collectedItemTax[$netsuiteOrder] = ($this->collectedItemTax[$netsuiteOrder] ?? 0.0)
+            + $this->taxPerItem->getTaxAmount($magentoItem, $product);
     }
 
     /**
-     * @inheritDoc
+     * An observer of netsuite_new_order_add_tax_item_before sets "ignore" on add_tax_item to skip the tax line.
      */
-    public function addTax(SalesOrder $netsuiteOrder, OrderInterface $magentoOrder, $taxAmount = null): void
+    public function process(SalesOrder $netsuiteOrder, OrderInterface $magentoOrder): void
     {
-        if (null === $taxAmount) {
-            $taxAmount = $this->taxAmount;
+        if (!$this->taxConfig->isTaxLogicActive(TaxLogic::TAX_HANDLING_TAX_ITEM, 'order_export')) {
+            return;
         }
+        $collectedItemTax = $this->collectedItemTax[$netsuiteOrder] ?? 0.0;
+        unset($this->collectedItemTax[$netsuiteOrder]);
+
         $addTaxItem = new \Magento\Framework\DataObject();
-        // Observer may add "Ignore" property = true to skip adding tax as separate item
         $this->eventManager->dispatch(
             'netsuite_new_order_add_tax_item_before',
             [
@@ -115,32 +83,13 @@ class TaxItemLine implements TaxManagerInterface
             ]
         );
 
-        //tax setting
-        $taxAmount += $magentoOrder->getShippingTaxAmount();
-        $taxAmount = round($taxAmount, 2);
+        $taxAmount = round($collectedItemTax + $magentoOrder->getShippingTaxAmount(), 2);
         if ($taxAmount && !$addTaxItem->getIgnore()) {
-            $netsuiteOrderItem = $this->createTaxItem($taxAmount);
-            $this->netSuiteOrderItemList->addOrderItemToList($netsuiteOrder, $netsuiteOrderItem);
+            $this->netSuiteOrderItemList->addOrderItemToList($netsuiteOrder, $this->createTaxItem($taxAmount));
         }
-        $this->taxAmount = 0;
     }
 
-    /**
-     * @inheritDoc
-     */
-    public function addShippingTax(SalesOrder $netsuiteOrder): void
-    {
-        $netsuiteOrder->shippingTaxCode = new RecordRef();
-        $netsuiteOrder->shippingTaxCode->internalId = $this->taxConfig->getNotTaxableInternalNetsuiteId();
-    }
-
-    /**
-     * Create NS tax item as separate order item
-     *
-     * @param float $taxAmount
-     * @return SalesOrderItem
-     */
-    private function createTaxItem($taxAmount): SalesOrderItem
+    private function createTaxItem(float $taxAmount): SalesOrderItem
     {
         $netsuiteOrderItem = new SalesOrderItem();
         $netsuiteOrderItem->description = self::ITEM_DESCRIPTION;

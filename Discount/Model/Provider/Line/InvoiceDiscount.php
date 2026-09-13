@@ -20,65 +20,34 @@
 namespace MageOS\NetSuiteConnector\Discount\Model\Provider\Line;
 
 use Magento\Sales\Api\Data\InvoiceInterface;
+use Magento\Sales\Api\Data\InvoiceItemInterface;
+use Magento\Sales\Api\Data\OrderInterface;
 use NetSuite\Classes\CashSale;
 use NetSuite\Classes\CashSaleItem;
 use NetSuite\Classes\RecordRef;
 use NetSuite\Classes\RecordType;
+use MageOS\NetSuiteConnector\Discount\Model\Config\Source\LogicSwitcher;
+use MageOS\NetSuiteConnector\Invoice\Model\Export\CashSaleLineMatcherInterface;
+use MageOS\NetSuiteConnector\Invoice\Model\Export\CashSaleProcessorInterface;
 
-/**
- * This class prepares a NS cashSaleItem to represent discount
- */
-class InvoiceDiscount implements \MageOS\NetSuiteConnector\Discount\Model\Mapper\Invoice\DiscountProviderInterface
+class InvoiceDiscount implements CashSaleProcessorInterface, CashSaleLineMatcherInterface
 {
     private const ITEM_DESCRIPTION = 'Discount';
 
-    private \MageOS\NetSuiteConnector\Discount\Model\Config\DiscountConfig $discountConfig;
-
     public function __construct(
-        \MageOS\NetSuiteConnector\Discount\Model\Config\DiscountConfig $discountConfig
+        private readonly \MageOS\NetSuiteConnector\Discount\Model\Config\DiscountConfig $discountConfig
     ) {
-        $this->discountConfig = $discountConfig;
     }
 
     /**
-     * Check whether given cashSaleItem represents discount
-     *
-     * @param CashSaleItem $netsuiteItem
-     * @return bool
+     * NetSuite adds the discount line only when it invoices a sales order for the first time.
+     * A later invoice of the same order gets its discount line here.
      */
-    public function isNSDiscountItem($netsuiteItem)
+    public function process(CashSale $cashSale, InvoiceInterface $magentoInvoice, OrderInterface $magentoOrder): void
     {
-        return $netsuiteItem->item->internalId == $this->discountConfig->getDiscountItemId();
-    }
-
-    /**
-     * Update NS discount item with actual discount value and description
-     *
-     * @param CashSaleItem $netsuiteItem
-     * @param float $discountValue
-     * @param string $discountDescription
-     */
-    public function updateNSDiscountItem($netsuiteItem, $discountValue, $discountDescription)
-    {
-        $discountValue = -(abs($discountValue));
-        $netsuiteItem->item->type = RecordType::discountItem;
-        $netsuiteItem->amount = $discountValue;
-        $netsuiteItem->rate =  $discountValue;
-        $netsuiteItem->price = new RecordRef();
-        $netsuiteItem->price->internalId = -1;
-        $netsuiteItem->description = $discountDescription ?? self::ITEM_DESCRIPTION;
-        $netsuiteItem->isTaxable = false;
-    }
-
-    /**
-     * While we try to match discounts and taxes, in case we have multiple invoices tax and discount will be split
-     * between them, so we need to manually add them as NetSuite will add them by default only the first time
-     *
-     * @param CashSale $cashSale
-     * @param InvoiceInterface $magentoInvoice
-     */
-    public function addNSDiscountItem($cashSale, InvoiceInterface $magentoInvoice)
-    {
+        if (!$this->discountConfig->isLogicSwitchActive(LogicSwitcher::LINE)) {
+            return;
+        }
         $discountItemId = $this->discountConfig->getDiscountItemId();
         $discountAmount = (float) $magentoInvoice->getDiscountAmount();
         if ($discountAmount) {
@@ -90,19 +59,68 @@ class InvoiceDiscount implements \MageOS\NetSuiteConnector\Discount\Model\Mapper
                 }
             }
             if (!$found) {
-                $discountItem = $this->createNSDiscountItem($discountAmount);
-                $cashSale->itemList->item[] = $discountItem;
+                $cashSale->itemList->item[] = $this->createNSDiscountItem($discountAmount);
                 $cashSale->itemList->item = array_values($cashSale->itemList->item);
             }
         }
     }
 
     /**
-     * Create NS cashSaleItem for discount amount
-     *
-     * @param float $discountAmount
-     * @return CashSaleItem
+     * A product line records its invoice item's discount. The discount line after it takes that discount.
      */
+    public function match(
+        CashSaleItem $netsuiteItem,
+        InvoiceItemInterface $magentoItem,
+        mixed $netsuiteInternalId,
+        OrderInterface $magentoOrder,
+        ?float &$pendingLineDiscount
+    ): bool {
+        if (!$this->discountConfig->isLogicSwitchActive(LogicSwitcher::LINE)) {
+            return false;
+        }
+        if ($netsuiteInternalId == $netsuiteItem->item->internalId) {
+            $pendingLineDiscount = $this->getInvoiceItemDiscount($magentoItem);
+            return false;
+        }
+
+        if ($pendingLineDiscount === null
+            || $pendingLineDiscount <= 0.001
+            || $netsuiteItem->item->internalId != $this->discountConfig->getDiscountItemId()
+        ) {
+            return false;
+        }
+
+        $this->updateNSDiscountItem(
+            $netsuiteItem,
+            $pendingLineDiscount,
+            $magentoOrder->getDiscountDescription()
+        );
+        $pendingLineDiscount = null;
+        return true;
+    }
+
+    private function getInvoiceItemDiscount($magentoItem): ?float
+    {
+        $discountValue = $magentoItem->getDiscountAmount();
+        $orderItem = $magentoItem->getOrderItem();
+        if (!$discountValue && $orderItem->getParentItemId()) {
+            $discountValue = $orderItem->getParentItem()->getDiscountAmount();
+        }
+        return $discountValue ? (float)$discountValue : null;
+    }
+
+    private function updateNSDiscountItem($netsuiteItem, $discountValue, $discountDescription)
+    {
+        $discountValue = -(abs($discountValue));
+        $netsuiteItem->item->type = RecordType::discountItem;
+        $netsuiteItem->amount = $discountValue;
+        $netsuiteItem->rate =  $discountValue;
+        $netsuiteItem->price = new RecordRef();
+        $netsuiteItem->price->internalId = -1;
+        $netsuiteItem->description = $discountDescription ?? self::ITEM_DESCRIPTION;
+        $netsuiteItem->isTaxable = false;
+    }
+
     private function createNSDiscountItem($discountAmount)
     {
         $discountItem = new CashSaleItem();

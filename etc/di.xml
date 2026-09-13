@@ -176,9 +176,6 @@
     <!-- Modified bundle product import/export to remove bundle options deleted from NetSuite -->
     <preference for="Magento\BundleImportExport\Model\Import\Product\Type\Bundle" type="MageOS\NetSuiteConnector\Product\Model\Product\Import\Type\Bundle" />
     <preference for="Magento\ConfigurableImportExport\Model\Import\Product\Type\Configurable" type="MageOS\NetSuiteConnector\Product\Model\Product\Import\Type\Configurable" />
-    <type name="MageOS\NetSuiteConnector\Product\Model\Product\Import\Type\Configurable">
-        <plugin name="import_configurable_product" type="MageOS\NetSuiteConnector\Product\Plugin\ImportExport\Import\Type\Configurable"/>
-    </type>
     <type name="Magento\ConfigurableProduct\Block\Product\View\Type\Configurable">
         <plugin name="ns_bundle_renderer_plugin" type="MageOS\NetSuiteConnector\Product\Plugin\ConfigurableBlockPlugin"/>
     </type>
@@ -233,9 +230,6 @@
         </arguments>
     </type>
 
-    <type name="MageOS\NetSuiteConnector\Core\Model\Process">
-        <plugin name="ns_import_queue_prefeych_products" type="MageOS\NetSuiteConnector\Product\Plugin\ImportQueuePrefetchDataPlugin"/>
-    </type>
     <type name="MageOS\NetSuiteConnector\Product\Model\Import\Item\Mapper">
         <arguments>
             <argument name="productMappers" xsi:type="array">
@@ -290,10 +284,6 @@
     <type name="Magento\Customer\Model\AccountManagement">
         <plugin sortOrder="10" name="imported_pwd_not_set_change_on_password_reset"
                 type="MageOS\NetSuiteConnector\CustomerImport\Plugin\PasswordResetPlugin"/>
-    </type>
-    <type name="MageOS\NetSuiteConnector\Customer\Model\Mapper\Customer">
-        <plugin sortOrder="1" name="is_importable_custom_field_set"
-                type="MageOS\NetSuiteConnector\CustomerImport\Plugin\IsImportableSetPlugin"/>
     </type>
     <!-- ARGUMENTS -->
     <type name="MageOS\NetSuiteConnector\Core\Model\Process\ImportProcessor">
@@ -372,83 +362,127 @@
             </argument>
         </arguments>
     </type>
-    <preference for="MageOS\NetSuiteConnector\Tax\Api\TaxInterface" type="MageOS\NetSuiteConnector\Tax\Model\Tax"/>
-    <type name="MageOS\NetSuiteConnector\Tax\Model\Tax">
-        <arguments>
-            <argument name="orderTaxManagers" xsi:type="array">
-                <item name="netsuite_processor"
-                      xsi:type="object">MageOS\NetSuiteConnector\Tax\Model\Order\Export\TaxManager\NetSuiteTaxProcessor\Proxy</item>
-                <item name="tax_item_line"
-                      xsi:type="object">MageOS\NetSuiteConnector\Tax\Model\Order\Export\TaxManager\TaxItemLine\Proxy</item>
-            </argument>
-            <argument name="invoiceTaxManagers" xsi:type="array">
-                <item name="netsuite_processor"
-                      xsi:type="object">MageOS\NetSuiteConnector\Tax\Model\Invoice\Export\TaxManager\NetSuiteTaxProcessor\Proxy</item>
-                <item name="tax_item_line"
-                      xsi:type="object">MageOS\NetSuiteConnector\Tax\Model\Invoice\Export\TaxManager\TaxItemLine\Proxy</item>
-            </argument>
-        </arguments>
-    </type>
-    <type name="MageOS\NetSuiteConnector\Tax\Plugin\OrderItemAddTax">
-        <arguments>
-            <argument name="productRepository"
-                      xsi:type="object">\Magento\Catalog\Api\ProductRepositoryInterface\Proxy</argument>
-        </arguments>
-    </type>
     <type name="MageOS\NetSuiteConnector\Order\Model\Mapper\Order">
-        <plugin sortOrder="1" name="add_tax_to_order" type="MageOS\NetSuiteConnector\Tax\Plugin\OrderAddTax"/>
+        <arguments>
+            <argument name="processors" xsi:type="array">
+                <item name="header" xsi:type="array">
+                    <item name="processor" xsi:type="object">MageOS\NetSuiteConnector\Order\Model\Export\Processor\Header</item>
+                    <item name="sortOrder" xsi:type="number">100</item>
+                </item>
+                <item name="customer" xsi:type="array">
+                    <item name="processor" xsi:type="object">MageOS\NetSuiteConnector\Order\Model\Export\Processor\Customer</item>
+                    <item name="sortOrder" xsi:type="number">200</item>
+                </item>
+                <item name="items" xsi:type="array">
+                    <item name="processor" xsi:type="object">MageOS\NetSuiteConnector\Order\Model\Export\Processor\Items</item>
+                    <item name="sortOrder" xsi:type="number">300</item>
+                </item>
+                <item name="addresses" xsi:type="array">
+                    <item name="processor" xsi:type="object">MageOS\NetSuiteConnector\Order\Model\Export\Processor\Addresses</item>
+                    <item name="sortOrder" xsi:type="number">400</item>
+                </item>
+                <item name="shipping" xsi:type="array">
+                    <item name="processor" xsi:type="object">MageOS\NetSuiteConnector\Order\Model\Export\Processor\Shipping</item>
+                    <item name="sortOrder" xsi:type="number">500</item>
+                </item>
+                <item name="shipping_tax_code" xsi:type="array">
+                    <item name="processor" xsi:type="object">MageOS\NetSuiteConnector\Tax\Model\Order\Export\Processor\ShippingTaxCode</item>
+                    <item name="sortOrder" xsi:type="number">550</item>
+                </item>
+                <item name="payment" xsi:type="array">
+                    <item name="processor" xsi:type="object">MageOS\NetSuiteConnector\Order\Model\Export\Processor\Payment</item>
+                    <item name="sortOrder" xsi:type="number">600</item>
+                </item>
+                <item name="custom_fields" xsi:type="array">
+                    <item name="processor" xsi:type="object">MageOS\NetSuiteConnector\Order\Model\Export\Processor\CustomFields</item>
+                    <item name="sortOrder" xsi:type="number">700</item>
+                </item>
+                <item name="location" xsi:type="array">
+                    <item name="processor" xsi:type="object">MageOS\NetSuiteConnector\Order\Model\Mapper\OrderExport\Location</item>
+                    <item name="sortOrder" xsi:type="number">800</item>
+                </item>
+                <item name="discount_body" xsi:type="array">
+                    <item name="processor" xsi:type="object">MageOS\NetSuiteConnector\Discount\Model\Provider\Body\OrderDiscount</item>
+                    <item name="sortOrder" xsi:type="number">900</item>
+                </item>
+                <item name="discount_line" xsi:type="array">
+                    <item name="processor" xsi:type="object">MageOS\NetSuiteConnector\Discount\Model\Provider\Line\OrderDiscount</item>
+                    <item name="sortOrder" xsi:type="number">900</item>
+                </item>
+                <item name="tax_item_line" xsi:type="array">
+                    <item name="processor" xsi:type="object">MageOS\NetSuiteConnector\Tax\Model\Order\Export\TaxManager\TaxItemLine</item>
+                    <item name="sortOrder" xsi:type="number">1000</item>
+                </item>
+                <item name="tax_netsuite_processor" xsi:type="array">
+                    <item name="processor" xsi:type="object">MageOS\NetSuiteConnector\Tax\Model\Order\Export\TaxManager\NetSuiteTaxProcessor</item>
+                    <item name="sortOrder" xsi:type="number">1000</item>
+                </item>
+            </argument>
+        </arguments>
     </type>
-    <type name="MageOS\NetSuiteConnector\Order\Model\Mapper\OrderExport\OrderItemList">
-        <plugin sortOrder="1" name="prepare_tax_for_order_item"
-                type="MageOS\NetSuiteConnector\Tax\Plugin\OrderItemAddTax"/>
-    </type>
-    <type name="MageOS\NetSuiteConnector\Order\Model\Mapper\OrderExport\OrderItem">
-        <plugin sortOrder="1" name="add_tax_to_order_item" type="MageOS\NetSuiteConnector\Tax\Plugin\OrderItemAddTax"/>
-    </type>
-    <type name="MageOS\NetSuiteConnector\Order\Model\Mapper\OrderExport\Shipment">
-        <plugin sortOrder="1" name="add_tax_to_order_shipment" type="MageOS\NetSuiteConnector\Tax\Plugin\OrderShipmentAddTax"/>
+    <type name="MageOS\NetSuiteConnector\Order\Model\Export\Processor\Items">
+        <arguments>
+            <argument name="processors" xsi:type="array">
+                <item name="base" xsi:type="array">
+                    <item name="processor" xsi:type="object">MageOS\NetSuiteConnector\Order\Model\Export\Processor\Item\Base</item>
+                    <item name="sortOrder" xsi:type="number">100</item>
+                </item>
+                <item name="promotion_data" xsi:type="array">
+                    <item name="processor" xsi:type="object">MageOS\NetSuiteConnector\Discount\Model\Order\Export\Processor\Item\PromotionData</item>
+                    <item name="sortOrder" xsi:type="number">300</item>
+                </item>
+                <item name="item_list" xsi:type="array">
+                    <item name="processor" xsi:type="object">MageOS\NetSuiteConnector\Order\Model\Mapper\OrderExport\OrderItemList</item>
+                    <item name="sortOrder" xsi:type="number">400</item>
+                </item>
+                <item name="tax_item_line" xsi:type="array">
+                    <item name="processor" xsi:type="object">MageOS\NetSuiteConnector\Tax\Model\Order\Export\TaxManager\TaxItemLine</item>
+                    <item name="sortOrder" xsi:type="number">500</item>
+                </item>
+                <item name="tax_netsuite_processor" xsi:type="array">
+                    <item name="processor" xsi:type="object">MageOS\NetSuiteConnector\Tax\Model\Order\Export\TaxManager\NetSuiteTaxProcessor</item>
+                    <item name="sortOrder" xsi:type="number">500</item>
+                </item>
+                <item name="discount_line" xsi:type="array">
+                    <item name="processor" xsi:type="object">MageOS\NetSuiteConnector\Discount\Model\Provider\Line\OrderDiscount</item>
+                    <item name="sortOrder" xsi:type="number">600</item>
+                </item>
+            </argument>
+        </arguments>
     </type>
     <type name="MageOS\NetSuiteConnector\Invoice\Model\Mapper\ExportInvoice">
-        <plugin sortOrder="1" name="add_tax_to_invoice"
-                type="MageOS\NetSuiteConnector\Tax\Plugin\InvoiceAddTax"/>
-    </type>
-    <type name="MageOS\NetSuiteConnector\Order\Model\Mapper\OrderExport\OrderItem">
-        <plugin name="add_discount_to_order_item"
-                type="MageOS\NetSuiteConnector\Discount\Plugin\OrderExport\OrderItemAddDiscount"/>
-    </type>
-    <type name="MageOS\NetSuiteConnector\Order\Model\Mapper\Order">
-        <plugin name="add_discount_to_order"
-                type="MageOS\NetSuiteConnector\Discount\Plugin\OrderExport\OrderAddDiscount"/>
-    </type>
-    <type name="MageOS\NetSuiteConnector\Invoice\Model\Mapper\ExportInvoice">
-        <plugin name="add_discount_to_invoice_item"
-                type="MageOS\NetSuiteConnector\Discount\Plugin\InvoiceExport\InvoiceItemAddDiscount"/>
-        <plugin name="add_discount_to_invoice"
-                type="MageOS\NetSuiteConnector\Discount\Plugin\InvoiceExport\InvoiceAddDiscount"/>
-    </type>
-    <type name="MageOS\NetSuiteConnector\Invoice\Model\Mapper\ImportInvoice">
-        <plugin name="get_discount_from_cash_sale"
-                type="MageOS\NetSuiteConnector\Discount\Plugin\InvoiceImport\CashSaleGetDiscount"/>
-    </type>
-
-
-    <type name="MageOS\NetSuiteConnector\Discount\Model\Mapper\Invoice\Discount">
         <arguments>
-            <argument name="providers" xsi:type="array">
-                <item name="line"
-                      xsi:type="object">MageOS\NetSuiteConnector\Discount\Model\Provider\Line\InvoiceDiscount\Proxy</item>
-                <item name="body"
-                      xsi:type="object">MageOS\NetSuiteConnector\Discount\Model\Provider\Body\InvoiceDiscount\Proxy</item>
+            <argument name="processors" xsi:type="array">
+                <item name="reconcile_items" xsi:type="array">
+                    <item name="processor" xsi:type="object">MageOS\NetSuiteConnector\Invoice\Model\Export\Processor\ReconcileItems</item>
+                    <item name="sortOrder" xsi:type="number">100</item>
+                </item>
+                <item name="discount_body" xsi:type="array">
+                    <item name="processor" xsi:type="object">MageOS\NetSuiteConnector\Discount\Model\Provider\Body\InvoiceDiscount</item>
+                    <item name="sortOrder" xsi:type="number">200</item>
+                </item>
+                <item name="discount_line" xsi:type="array">
+                    <item name="processor" xsi:type="object">MageOS\NetSuiteConnector\Discount\Model\Provider\Line\InvoiceDiscount</item>
+                    <item name="sortOrder" xsi:type="number">200</item>
+                </item>
+                <item name="tax_item_line" xsi:type="array">
+                    <item name="processor" xsi:type="object">MageOS\NetSuiteConnector\Tax\Model\Invoice\Export\TaxManager\TaxItemLine</item>
+                    <item name="sortOrder" xsi:type="number">300</item>
+                </item>
             </argument>
         </arguments>
     </type>
-    <type name="MageOS\NetSuiteConnector\Discount\Model\Mapper\Order\Discount">
+    <type name="MageOS\NetSuiteConnector\Invoice\Model\Export\Processor\ReconcileItems">
         <arguments>
-            <argument name="providers" xsi:type="array">
-                <item name="line"
-                      xsi:type="object">MageOS\NetSuiteConnector\Discount\Model\Provider\Line\OrderDiscount\Proxy</item>
-                <item name="body"
-                      xsi:type="object">MageOS\NetSuiteConnector\Discount\Model\Provider\Body\OrderDiscount\Proxy</item>
+            <argument name="matchers" xsi:type="array">
+                <item name="product_line" xsi:type="array">
+                    <item name="processor" xsi:type="object">MageOS\NetSuiteConnector\Invoice\Model\Export\LineMatcher\ProductLine</item>
+                    <item name="sortOrder" xsi:type="number">100</item>
+                </item>
+                <item name="discount_line" xsi:type="array">
+                    <item name="processor" xsi:type="object">MageOS\NetSuiteConnector\Discount\Model\Provider\Line\InvoiceDiscount</item>
+                    <item name="sortOrder" xsi:type="number">200</item>
+                </item>
             </argument>
         </arguments>
     </type>
@@ -532,9 +566,6 @@
             </argument>
         </arguments>
     </type>
-    <type name="MageOS\NetSuiteConnector\Order\Model\Mapper\OrderExport\Shipment">
-        <plugin name="mageos_netsuite_shipping_id" type="MageOS\NetSuiteConnector\Shipment\Plugin\NetsuiteShippingMethodInternalId"/>
-    </type>
     <virtualType name="ShipmentRequestBuilder" type="MageOS\NetSuiteConnector\Core\Model\Command\Utils\ProcessRecord\DefaultRequestBuilder">
         <arguments>
             <argument name="recordType" xsi:type="string">itemFulfillment</argument>
@@ -565,9 +596,8 @@
             <argument name="possibleModes" xsi:type="array">
                 <item name="stock" xsi:type="string">stock</item>
             </argument>
+            <argument name="stock" xsi:type="object">MageOS\NetSuiteConnector\Inventory\Model\Process\Import\Stock\Proxy</argument>
         </arguments>
-        <plugin name="netsuite_cron_process_mode"
-                type="MageOS\NetSuiteConnector\Inventory\Plugin\NetSuiteCronPlugin"/>
     </type>
     <type name="MageOS\NetSuiteConnector\Inventory\Command\Util\UpdateStocks">
         <arguments>
@@ -586,10 +616,6 @@
     <type name="Magento\CatalogImportExport\Model\Indexer\Stock\Plugin\Import">
         <plugin name="prevent_stock_index_marking"
                 type="MageOS\NetSuiteConnector\Inventory\Plugin\PreventMarkIndexInvalid"/>
-    </type>
-    <type name="MageOS\NetSuiteConnector\Core\Model\Config\ConnectorConfig">
-        <plugin name="update_connector_stock_config_path_for_run_mode"
-                type="MageOS\NetSuiteConnector\Inventory\Plugin\ConnectorStockConfigPathForRunMode"/>
     </type>
     <type name="Magento\InventorySalesApi\Api\PlaceReservationsForSalesEventInterface">
         <plugin name="disable_redundant_reservation"
@@ -631,14 +657,7 @@
             <argument name="possibleModes" xsi:type="array">
                 <item name="location" xsi:type="string">location</item>
             </argument>
+            <argument name="locationImportToQueue" xsi:type="object">MageOS\NetSuiteConnector\Inventory\Multi\Model\Process\Import\LocationImportToQueue\Proxy</argument>
         </arguments>
-    </type>
-    <type name="MageOS\NetSuiteConnector\Core\Command\NetSuiteCron">
-        <plugin name="location_mode_cron"
-                type="MageOS\NetSuiteConnector\Inventory\Multi\Plugin\NetSuiteCron"/>
-    </type>
-    <type name="\MageOS\NetSuiteConnector\Shipment\Model\Mapper\TrackingNumber">
-        <plugin name="tracking_numbers_building"
-                type="MageOS\NetSuiteConnector\Shipment\MultiSource\Plugin\TrackingNumberMultiSource"/>
     </type>
 </config>

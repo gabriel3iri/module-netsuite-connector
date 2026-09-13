@@ -337,6 +337,42 @@ class OrderPlaceTest extends \PHPUnit\Framework\TestCase
     }
 
     /**
+     * @magentoDataFixture MageOS_NetSuiteConnector::Test/Integration/Core/_final/_files/customer.php
+     * @magentoDataFixture MageOS_NetSuiteConnector::Test/Integration/Core/_final/_files/quote.php
+     * @magentoDataFixture MageOS_NetSuiteConnector::Test/Integration/Core/_final/_files/order.php
+     * phpcs:disable
+     * @magentoDataFixture MageOS_NetSuiteConnector::Test/Integration/Core/_final/_files/submit_order_to_ns_queue.php
+     * @magentoConfigFixture default/mageos_netsuite/payment_methods/netsuite_mapping [{"payment_method":"checkmo","payment_cc":"","internal_netsuite_id":"1"}]
+     * @magentoConfigFixture default/mageos_netsuite/shipping_methods/netsuite_default_shipping_id 2
+     * @magentoConfigFixture default/mageos_netsuite/shipping_methods/netsuite_mapping {"_1598626367813_813":{"shipping_method":"flatrate_flatrate","shipping_description":"","internal_netsuite_id":"2"}}
+     * phpcs:enable
+     * @magentoConfigFixture default/mageos_netsuite/orders/location_id 2
+     * @magentoConfigFixture default/mageos_netsuite/orders/logic_switch line
+     * @magentoConfigFixture default/mageos_netsuite/tax/not_taxable_internal_netsuite_id 55
+     * @magentoAppIsolation enabled
+     */
+    public function testShippingTaxCodeIsSetWhenShippingMethodIsMapped()
+    {
+        \Magento\TestFramework\Helper\Bootstrap::getInstance()
+            ->loadArea(\Magento\Framework\App\Area::AREA_FRONTEND);
+
+        $message = $this->getMessage();
+        $orderPlaceProcess = $this->objectManager->create(
+            \MageOS\NetSuiteConnector\Order\Model\Process\Export\OrderPlace::class
+        );
+        $orderPlaceProcess->process($message);
+
+        /** @var AddRequest $addRequest */
+        $addRequest = self::$netsuiteServiceFaker->getAddRequest();
+        $this->assertNotNull($addRequest);
+        $this->assertNotNull($addRequest->record->shipMethod);
+        $this->assertNotNull($addRequest->record->shippingTaxCode);
+        $this->assertEquals(55, $addRequest->record->shippingTaxCode->internalId);
+
+        $this->cleanUpQueue();
+    }
+
+    /**
      * Create Message which we process
      *
      * @return MessageInterface

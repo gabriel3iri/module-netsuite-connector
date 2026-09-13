@@ -19,11 +19,10 @@
 
 namespace MageOS\NetSuiteConnector\Discount\Model\Config;
 
+use MageOS\NetSuiteConnector\Core\Exception\ConnectorRuntimeException;
 use MageOS\NetSuiteConnector\Core\Model\Config\AbstractConfig;
 
 /**
- * This class provides access to configuration
- *
  * @method int getDiscountItemId
  * @method bool getDisableOrderLevelDiscount
  * @method string getLogicSwitch
@@ -37,6 +36,29 @@ class DiscountConfig extends AbstractConfig
     private const LOGIC_SWITCH = 'mageos_netsuite/orders/logic_switch';
     private const ADD_PROMOTION_DATA = 'mageos_netsuite/orders/add_promotion_data';
     private const ORDER_SKIP_DISCOUNT = 'mageos_netsuite/orders/order_skip_discount';
+
+    public function __construct(
+        \MageOS\NetSuiteConnector\Core\Model\Config\ConfigurationResolverFactory $configFactory,
+        private readonly \MageOS\NetSuiteConnector\Discount\Model\Config\Source\LogicSwitcher $logicSwitcher
+    ) {
+        parent::__construct($configFactory);
+    }
+
+    /**
+     * @throws ConnectorRuntimeException when discounts are not skipped and logic_switch is not an option of the
+     *     admin source model
+     */
+    public function isLogicSwitchActive(string $logicSwitch): bool
+    {
+        if ($this->getOrderSkipDiscount()) {
+            return false;
+        }
+        $configuredLogicSwitch = $this->getLogicSwitch();
+        if (!in_array($configuredLogicSwitch, array_column($this->logicSwitcher->toOptionArray(), 'value'), true)) {
+            throw new ConnectorRuntimeException('Discount Provider mismatch with Interface!');
+        }
+        return $configuredLogicSwitch === $logicSwitch;
+    }
 
     public function getOptionsMap(): array
     {

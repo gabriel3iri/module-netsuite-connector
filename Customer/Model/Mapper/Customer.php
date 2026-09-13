@@ -62,9 +62,6 @@ use NetSuite\Classes\StringCustomFieldRef;
 use MageOS\NetSuiteConnector\Core\Helper\Transform;
 use MageOS\NetSuiteConnector\Core\Exception\ConnectorRuntimeException;
 
-/**
- * Class Customer
- */
 class Customer
 {
     /** @var AddressRepositoryInterface */
@@ -123,9 +120,8 @@ class Customer
     private $priceLevel;
 
     /**
-     * Cache customers fetched from NetSuite here.
-     * Had to add it to complete integration test, but will result in less queries to NS when
-     * exporting many orders from different customer :)
+     * Caches customers fetched from NetSuite; added to satisfy an integration test, and reduces NS
+     * queries when exporting many orders from different customers.
      * @var array
      */
     private $customerCache;
@@ -134,26 +130,6 @@ class Customer
      */
     private $serviceManagement;
 
-    /**
-     * Customer constructor.
-     * @param AddressRepositoryInterface $addressRepositoryInterface
-     * @param CountryInformationAcquirerInterfaceFactory $countryInformationAcquirerInterfaceFactory
-     * @param Transform $transformHelper
-     * @param Address $addressHelper
-     * @param Context $context
-     * @param CustomerInterfaceFactory $customerInterface
-     * @param CustomerRepositoryInterface $customerRepositoryInterface
-     * @param FilterBuilder $filterBuilder
-     * @param StoreManagerInterface $storeManager
-     * @param CustomerInterfaceFactory $customerInterfaceFactory
-     * @param AddressInterfaceFactory $addressInterfaceFactory
-     * @param MagentoAddressRepository $addressRepository
-     * @param AddressRepository $orderAddressRepository
-     * @param ScopeConfigInterface $scopeConfig
-     * @param SearchCriteriaBuilder $searchCriteriaBuilder
-     * @param CollectionFactory $countryCollectionFactory
-     * @param PriceLevel $priceLevel
-     */
     public function __construct(
         \MageOS\NetSuiteConnector\Core\Model\NetSuite\Service\Management $serviceManagement,
         AddressRepositoryInterface $addressRepositoryInterface,
@@ -172,7 +148,8 @@ class Customer
         ScopeConfigInterface $scopeConfig,
         SearchCriteriaBuilder $searchCriteriaBuilder,
         CollectionFactory $countryCollectionFactory,
-        PriceLevel $priceLevel
+        PriceLevel $priceLevel,
+        private readonly \MageOS\NetSuiteConnector\CustomerImport\Model\Customer\Export\IsImportableFlag $isImportableFlag
     ) {
         $this->addressRepositoryInterface = $addressRepositoryInterface;
         $this->countryInformationAcquirerInterfaceFactory = $countryInformationAcquirerInterfaceFactory;
@@ -194,27 +171,17 @@ class Customer
         $this->serviceManagement = $serviceManagement;
     }
 
-    /**
-     * @param $customer
-     * @return string
-     */
     public function getExternalId($customer): string
     {
         return $customer->getEmail() . '_' . $customer->getStoreId();
     }
 
-    /**
-     * @param $order
-     * @return string
-     */
     public function getExternalIdFromOrder($order): string
     {
         return $order->getCustomerEmail() . '_' . $order->getStoreId();
     }
 
     /**
-     * @param CustomerInterface $magentoCustomer
-     * @return \NetSuite\Classes\Customer
      * @throws CouldNotSaveException
      * @throws LocalizedException
      */
@@ -286,12 +253,12 @@ class Customer
             $netsuiteCustomer->phone = $phone;
         }
 
+        $this->isImportableFlag->execute($netsuiteCustomer);
+
         return $netsuiteCustomer;
     }
 
     /**
-     * @param $by_field
-     * @param $search_string
      * @return bool
      * @throws ConnectorRuntimeException
      * @throws Exception
@@ -330,7 +297,6 @@ class Customer
     }
 
     /**
-     * @param $email
      * @return bool
      * @throws Exception
      */
@@ -367,7 +333,6 @@ class Customer
     }
 
     /**
-     * @param CustomerInterface $customer
      * @return CustomerAddressbookList
      * @throws LocalizedException
      * @throws CouldNotSaveException
@@ -491,8 +456,6 @@ class Customer
     }
 
     /**
-     * @param OrderInterface $order
-     * @return mixed
      * @throws Exception
      */
     public function createNetsuiteCustomerFromOrder(OrderInterface $order)
@@ -631,8 +594,6 @@ class Customer
     }
 
     /**
-     * @param string $netsuiteInternalId
-     * @return null
      * @throws ConnectorRuntimeException
      */
     public function getByInternalId(string $netsuiteInternalId)
@@ -669,7 +630,6 @@ class Customer
     }
 
     /**
-     * @param $string
      * @return string
      */
     public function limitTo32Chars($string)
@@ -681,7 +641,6 @@ class Customer
     }
 
     /**
-     * @param \Magento\Sales\Api\Data\OrderInterface $magentoOrder
      * @return \Magento\Sales\Api\Data\OrderAddressInterface[]
      */
     public function getOrderAddresses(\Magento\Sales\Api\Data\OrderInterface $magentoOrder)

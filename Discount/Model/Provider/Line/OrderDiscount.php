@@ -19,6 +19,7 @@
 
 namespace MageOS\NetSuiteConnector\Discount\Model\Provider\Line;
 
+use Magento\Catalog\Api\Data\ProductInterface;
 use Magento\Catalog\Model\Product\Type;
 use Magento\ConfigurableProduct\Model\Product\Type\Configurable;
 use Magento\Sales\Api\Data\OrderInterface;
@@ -27,57 +28,71 @@ use NetSuite\Classes\RecordRef;
 use NetSuite\Classes\RecordType;
 use NetSuite\Classes\SalesOrder;
 use NetSuite\Classes\SalesOrderItem;
+use MageOS\NetSuiteConnector\Discount\Model\Config\Source\LogicSwitcher;
+use MageOS\NetSuiteConnector\Order\Model\Export\OrderItemProcessorInterface;
+use MageOS\NetSuiteConnector\Order\Model\Export\OrderProcessorInterface;
 
 /**
- * This class adds discounts as NS order items to NS order. It can add different discount types: order level discount,
- * item level discount and shipping discount.
+ * With disable_order_level_discount set, every item and the shipping get their own discount line.
+ * Otherwise the order gets a single discount line.
  */
-class OrderDiscount implements \MageOS\NetSuiteConnector\Discount\Model\Mapper\Order\DiscountProviderInterface
+class OrderDiscount implements OrderProcessorInterface, OrderItemProcessorInterface
 {
     private const DISCOUNT_ITEM_DESCRIPTION = 'Discount';
     private const SHIPPING_DISCOUNT_ITEM_DESCRIPTION = 'Shipping Discount';
 
-    private \MageOS\NetSuiteConnector\Discount\Model\Config\DiscountConfig $discountConfig;
-    private \Magento\Framework\Event\ManagerInterface $eventManager;
-    private \MageOS\NetSuiteConnector\Order\Model\Mapper\OrderExport\OrderItemList $nsOrderItemList;
-
     public function __construct(
-        \MageOS\NetSuiteConnector\Discount\Model\Config\DiscountConfig $discountConfig,
-        \Magento\Framework\Event\ManagerInterface $eventManager,
-        \MageOS\NetSuiteConnector\Order\Model\Mapper\OrderExport\OrderItemList $nsOrderItemList,
+        private readonly \MageOS\NetSuiteConnector\Discount\Model\Config\DiscountConfig $discountConfig,
+        private readonly \Magento\Framework\Event\ManagerInterface $eventManager,
+        private readonly \MageOS\NetSuiteConnector\Order\Model\Mapper\OrderExport\OrderItemList $nsOrderItemList,
         private readonly \MageOS\NetSuiteConnector\Order\Model\Mapper\OrderExport\Location $nsLocation
     ) {
-        $this->discountConfig = $discountConfig;
-        $this->eventManager = $eventManager;
-        $this->nsOrderItemList = $nsOrderItemList;
     }
 
-    /**
-     * Check whether the order level discount is disabled or enabled
-     *
-     * @return bool
-     */
-    private function canUseOrderItemLevelDiscount(): bool
-    {
-        return (bool)$this->discountConfig->getDisableOrderLevelDiscount();
-    }
-
-    /**
-     * Add discount for whole order as NS item
-     *
-     * @param SalesOrder $netsuiteOrder
-     * @param OrderInterface $magentoOrder
-     */
-    public function addOrderLevelDiscount(SalesOrder $netsuiteOrder, OrderInterface $magentoOrder): void
-    {
-        if ($this->canUseOrderItemLevelDiscount()) {
+    public function processItem(
+        SalesOrder $netsuiteOrder,
+        SalesOrderItem $netsuiteItem,
+        OrderItemInterface $magentoItem,
+        ProductInterface $product,
+        OrderInterface $magentoOrder
+    ): void {
+        if (!$this->discountConfig->isLogicSwitchActive(LogicSwitcher::LINE)
+            || !$this->discountConfig->getDisableOrderLevelDiscount()
+        ) {
             return;
         }
+        $parentItem = $magentoItem->getParentItem();
+        if ($magentoItem->getProductType() === Type::TYPE_SIMPLE
+            && $parentItem
+            && $parentItem->getProductType() === Configurable::TYPE_CODE
+        ) {
+            $discountAmount = (float)$parentItem->getDiscountAmount();
+        } else {
+            $discountAmount = (float)$magentoItem->getDiscountAmount();
+        }
+        if (abs($discountAmount) > 0.001) {
+            $netsuiteOrderItem = $this->createDiscountItem($magentoOrder, -(abs($discountAmount)));
+            $this->nsOrderItemList->addOrderItemToList($netsuiteOrder, $netsuiteOrderItem);
+        }
+    }
 
+    public function process(SalesOrder $netsuiteOrder, OrderInterface $magentoOrder): void
+    {
+        if (!$this->discountConfig->isLogicSwitchActive(LogicSwitcher::LINE)) {
+            return;
+        }
+        if ($this->discountConfig->getDisableOrderLevelDiscount()) {
+            $this->addShippingDiscount($netsuiteOrder, $magentoOrder);
+            return;
+        }
+        $this->addOrderLevelDiscount($netsuiteOrder, $magentoOrder);
+    }
+
+    private function addOrderLevelDiscount(SalesOrder $netsuiteOrder, OrderInterface $magentoOrder): void
+    {
         $discountAmount = (float)$magentoOrder->getDiscountAmount();
         if (abs($discountAmount) > 0.001) {
             $netsuiteOrderItem = $this->createDiscountItem($magentoOrder, $discountAmount);
-            // Dispatch additional event for discounts processing
             $this->eventManager->dispatch(
                 'netsuite_new_order_add_discount_before',
                 ['magento_order' => $magentoOrder, 'discount' => $netsuiteOrderItem]
@@ -86,65 +101,17 @@ class OrderDiscount implements \MageOS\NetSuiteConnector\Discount\Model\Mapper\O
         }
     }
 
-    /**
-     * Add discount for whole given order item as NS item
-     *
-     * @param SalesOrder $netsuiteOrder
-     * @param OrderInterface $magentoOrder
-     * @param OrderItemInterface $item
-     */
-    public function addItemLevelDiscount(
-        SalesOrder $netsuiteOrder,
-        OrderInterface $magentoOrder,
-        OrderItemInterface $item
-    ): void {
-        if (!$this->canUseOrderItemLevelDiscount()) {
-            return;
-        }
-        $parentItem = $item->getParentItem();
-        if ($item->getProductType() === Type::TYPE_SIMPLE
-            && $parentItem
-            && $parentItem->getProductType() === Configurable::TYPE_CODE
-        ) {
-            $discountAmount = (float)$parentItem->getDiscountAmount();
-        } else {
-            $discountAmount = (float)$item->getDiscountAmount();
-        }
-        if (abs($discountAmount) > 0.001) {
-            $discountAmount = -(abs($discountAmount));
-            $netsuiteOrderItem = $this->createDiscountItem($magentoOrder, $discountAmount);
-            $this->nsOrderItemList->addOrderItemToList($netsuiteOrder, $netsuiteOrderItem);
-        }
-    }
-
-    /**
-     * Add shipping discount for order as NS item
-     *
-     * @param SalesOrder $netsuiteOrder
-     * @param OrderInterface $magentoOrder
-     */
-    public function addShippingDiscount(SalesOrder $netsuiteOrder, OrderInterface $magentoOrder): void
+    private function addShippingDiscount(SalesOrder $netsuiteOrder, OrderInterface $magentoOrder): void
     {
-        if (!$this->canUseOrderItemLevelDiscount()) {
-            return;
-        }
         $shippingDiscountAmount = (float)$magentoOrder->getShippingDiscountAmount();
         if (abs($shippingDiscountAmount) > 0.001) {
-            $shippingDiscountAmount = -(abs($shippingDiscountAmount));
-            $netsuiteOrderItem = $this->createDiscountItem($magentoOrder, $shippingDiscountAmount);
+            $netsuiteOrderItem = $this->createDiscountItem($magentoOrder, -(abs($shippingDiscountAmount)));
             $netsuiteOrderItem->description = self::SHIPPING_DISCOUNT_ITEM_DESCRIPTION;
             $this->nsOrderItemList->addOrderItemToList($netsuiteOrder, $netsuiteOrderItem);
         }
     }
 
-    /**
-     * Create NS order item for discount
-     *
-     * @param OrderInterface $magentoOrder
-     * @param float $discountAmount
-     * @return SalesOrderItem
-     */
-    private function createDiscountItem(OrderInterface $magentoOrder, $discountAmount): SalesOrderItem
+    private function createDiscountItem(OrderInterface $magentoOrder, float $discountAmount): SalesOrderItem
     {
         $netsuiteOrderItem = new SalesOrderItem();
         $netsuiteOrderItem->description = $magentoOrder->getCouponCode() ?? self::DISCOUNT_ITEM_DESCRIPTION;

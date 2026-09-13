@@ -67,7 +67,8 @@ class InvoiceSaveTest extends \PHPUnit\Framework\TestCase
             '_files/order_set_netsuite_id.php',
             '_files/order_rollback.php',
             '_files/invoice.php',
-            '_files/invoice_rollback.php'
+            '_files/invoice_rollback.php',
+            '_files/invoice_with_discount_and_tax.php'
         ];
 
         $path = realpath(__DIR__ . "/" . self::RELATIVE_PATH_TO_FIXTURES) . "/";
@@ -289,5 +290,152 @@ class InvoiceSaveTest extends \PHPUnit\Framework\TestCase
         $content = file_get_contents($file);
         $serialized = str_replace("\r", "", $content);
         return unserialize($serialized);// phpcs:ignore
+    }
+
+    /**
+     * @magentoDataFixture MageOS_NetSuiteConnector::Test/Integration/Invoice/_files/customer.php
+     * @magentoDataFixture MageOS_NetSuiteConnector::Test/Integration/Invoice/_files/order.php
+     * @magentoDataFixture MageOS_NetSuiteConnector::Test/Integration/Invoice/_files/order_set_netsuite_id.php
+     * @magentoDataFixture MageOS_NetSuiteConnector::Test/Integration/Invoice/_files/invoice_with_discount_and_tax.php
+     * @magentoConfigFixture default/mageos_netsuite/orders/logic_switch line
+     * @magentoConfigFixture default/mageos_netsuite/orders/discount_item_id 123
+     * @magentoConfigFixture default/mageos_netsuite/tax/tax_item_internal_netsuite_id 124
+     * @magentoConfigFixture default/mageos_netsuite/tax/skip_tax 0
+     * @magentoAppIsolation enabled
+     */
+    public function testInvoiceExportDiscountLinePresentInInitializeResponse(): void
+    {
+        $this->unsetSkipInvoiceExport();
+        $faker = $this->createScopedFaker('discount_and_tax_present');
+
+        $message = $this->getMessage();
+
+        $invoiceSaveProcess = $this->objectManager->create(
+            \MageOS\NetSuiteConnector\Invoice\Model\Process\Export\InvoiceSave::class
+        );
+        $invoiceSaveProcess->process($message);
+
+        /** @var \NetSuite\Classes\AddRequest $addRequest */
+        $addRequest = $faker->getAddRequest();
+        $items = array_values($addRequest->record->itemList->item);
+
+        $this->assertCount(3, $items, 'Expected the product line, the rewritten discount line and the appended tax line');
+
+        $productLine = $items[0];
+        $this->assertSame('1', (string)$productLine->item->internalId);
+        $this->assertFalse(isset($productLine->taxRate1), 'Product line must not carry taxRate1');
+
+        $discountLine = $items[1];
+        $this->assertSame('123', (string)$discountLine->item->internalId);
+        $this->assertEquals(-15.0, $discountLine->rate);
+        $this->assertEquals(-15.0, $discountLine->amount);
+        $this->assertSame('Order discount', $discountLine->description);
+
+        $taxLine = end($addRequest->record->itemList->item);
+        $this->assertSame('124', (string)$taxLine->item->internalId);
+        $this->assertEquals(6.75, $taxLine->amount);
+
+        $this->restoreUnsetTaxRate1($addRequest);
+        $snapshot = $this->objectManager->create(
+            \MageOS\NetSuiteConnector\Test\Integration\Core\Helper\RequestSnapshot::class
+        );
+        $snapshot->assertRecordMatches(
+            __DIR__ . '/../../../_files_ns_request/Invoice-export-add-discount-and-tax',
+            $addRequest,
+            []
+        );
+    }
+
+    /**
+     * @magentoDataFixture MageOS_NetSuiteConnector::Test/Integration/Invoice/_files/customer.php
+     * @magentoDataFixture MageOS_NetSuiteConnector::Test/Integration/Invoice/_files/order.php
+     * @magentoDataFixture MageOS_NetSuiteConnector::Test/Integration/Invoice/_files/order_set_netsuite_id.php
+     * @magentoDataFixture MageOS_NetSuiteConnector::Test/Integration/Invoice/_files/invoice_with_discount_and_tax.php
+     * @magentoConfigFixture default/mageos_netsuite/orders/logic_switch line
+     * @magentoConfigFixture default/mageos_netsuite/orders/discount_item_id 123
+     * @magentoConfigFixture default/mageos_netsuite/tax/tax_item_internal_netsuite_id 124
+     * @magentoConfigFixture default/mageos_netsuite/tax/skip_tax 0
+     * @magentoAppIsolation enabled
+     */
+    public function testInvoiceExportDiscountLineAbsentFromInitializeResponse(): void
+    {
+        $this->unsetSkipInvoiceExport();
+        $faker = $this->createScopedFaker('discount_and_tax_absent');
+
+        $message = $this->getMessage();
+
+        $invoiceSaveProcess = $this->objectManager->create(
+            \MageOS\NetSuiteConnector\Invoice\Model\Process\Export\InvoiceSave::class
+        );
+        $invoiceSaveProcess->process($message);
+
+        /** @var \NetSuite\Classes\AddRequest $addRequest */
+        $addRequest = $faker->getAddRequest();
+        $items = array_values($addRequest->record->itemList->item);
+
+        $this->assertCount(3, $items, 'The appended discount line and tax line are both expected');
+        $this->assertSame('123', (string)$items[1]->item->internalId, 'The 123 line must be appended before 124');
+        $this->assertSame('124', (string)$items[2]->item->internalId, 'The 123 line must be appended before 124');
+
+        $this->restoreUnsetTaxRate1($addRequest);
+        $snapshot = $this->objectManager->create(
+            \MageOS\NetSuiteConnector\Test\Integration\Core\Helper\RequestSnapshot::class
+        );
+        $snapshot->assertRecordMatches(
+            __DIR__ . '/../../../_files_ns_request/Invoice-export-add-appended-discount',
+            $addRequest,
+            []
+        );
+    }
+
+    /**
+     * TaxItemLine::process() unsets taxRate1 on every line. A live object with an
+     * unset declared property serializes without that key, but the snapshot file
+     * round-trips through unserialize(), which reconstructs every declared
+     * property at its class default. Re-assign the property where it is unset so
+     * the live object matches that round trip before comparing.
+     *
+     * @param \NetSuite\Classes\AddRequest $addRequest
+     */
+    private function restoreUnsetTaxRate1(\NetSuite\Classes\AddRequest $addRequest): void
+    {
+        foreach ($addRequest->record->itemList->item as $item) {
+            if (!isset($item->taxRate1)) {
+                $item->taxRate1 = null;
+            }
+        }
+    }
+
+    /**
+     * Point a fresh NetSuiteServiceFaker at a scenario-scoped fixtures directory and bind it as the
+     * shared NetSuite service instance, without disturbing the class-wide static faker the other
+     * tests in this class use.
+     *
+     * @param string $scenario
+     * @return \MageOS\NetSuiteConnector\Test\Integration\Core\Helper\NetSuiteServiceFaker
+     */
+    private function createScopedFaker(
+        string $scenario
+    ): \MageOS\NetSuiteConnector\Test\Integration\Core\Helper\NetSuiteServiceFaker {
+        $path = __DIR__ . "/../../../_files/" . $scenario . "/";
+        $faker = new \MageOS\NetSuiteConnector\Test\Integration\Core\Helper\NetSuiteServiceFaker($path);
+        $faker->setParameters([
+            'netsuite_internal_id' => 11,
+            'initialize_success' => 1,
+            'add_success' => 1
+        ]);
+
+        $management = $this->getMockBuilder(\MageOS\NetSuiteConnector\Core\Model\NetSuite\Service\Management::class)
+            ->onlyMethods(['get'])
+            ->disableOriginalConstructor()
+            ->getMock();
+        $management->method('get')->willReturn($faker);
+
+        $this->objectManager->addSharedInstance(
+            $management,
+            \MageOS\NetSuiteConnector\Core\Model\NetSuite\Service\Management::class
+        );
+
+        return $faker;
     }
 }

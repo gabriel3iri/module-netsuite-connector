@@ -20,56 +20,24 @@
 namespace MageOS\NetSuiteConnector\Discount\Model\Provider\Body;
 
 use Magento\Sales\Api\Data\InvoiceInterface;
+use Magento\Sales\Api\Data\OrderInterface;
 use NetSuite\Classes\CashSale;
-use NetSuite\Classes\CashSaleItem;
 use NetSuite\Classes\RecordRef;
-use MageOS\NetSuiteConnector\Discount\Model\Mapper\Invoice\DiscountProviderInterface;
+use MageOS\NetSuiteConnector\Discount\Model\Config\Source\LogicSwitcher;
+use MageOS\NetSuiteConnector\Invoice\Model\Export\CashSaleProcessorInterface;
 
-/**
- * This class prepares a NS CashSale to include Discount
- */
-class InvoiceDiscount implements DiscountProviderInterface
+class InvoiceDiscount implements CashSaleProcessorInterface
 {
-    private const ITEM_DESCRIPTION = 'Discount';
-
-    private \MageOS\NetSuiteConnector\Discount\Model\Config\DiscountConfig $discountConfig;
-
     public function __construct(
-        \MageOS\NetSuiteConnector\Discount\Model\Config\DiscountConfig $discountConfig
+        private readonly \MageOS\NetSuiteConnector\Discount\Model\Config\DiscountConfig $discountConfig
     ) {
-        $this->discountConfig = $discountConfig;
     }
 
-    /**
-     * Check whether given cashSaleItem represents discount
-     *
-     * @param CashSaleItem $netsuiteItem
-     * @return bool
-     *
-     * This method is not used on Body approach
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
-     */
-    public function isNSDiscountItem($netsuiteItem): bool
+    public function process(CashSale $cashSale, InvoiceInterface $magentoInvoice, OrderInterface $magentoOrder): void
     {
-        return false;
-    }
-
-    // phpcs:disable
-    /**
-     * This method is not used on Body approach
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
-     */
-    public function updateNSDiscountItem($netsuiteItem, $discountValue, $discountDescription): void
-    {
-    }
-    // phpcs:enable
-
-    /**
-     * @param CashSale $cashSale
-     * @param InvoiceInterface $magentoInvoice
-     */
-    public function addNSDiscountItem($cashSale, InvoiceInterface $magentoInvoice): void
-    {
+        if (!$this->discountConfig->isLogicSwitchActive(LogicSwitcher::BODY)) {
+            return;
+        }
         $discountAmount = (float) $magentoInvoice->getDiscountAmount();
 
         if (abs($discountAmount) > 0.001 && $this->discountConfig->getDiscountItemId()) {

@@ -33,16 +33,15 @@ use NetSuite\Classes\SearchMoreWithIdRequest;
 use NetSuite\Classes\SearchRequest;
 use MageOS\NetSuiteConnector\Core\Model\Mutex;
 use MageOS\NetSuiteConnector\Core\Model\Process\Import\AbstractImportProcessor;
+use MageOS\NetSuiteConnector\Core\Model\Process\Import\BatchPrefetchInterface;
 
 /**
- * Import Processor for Items
- *
  * Because of dependency on AbstractImportProcessor, currently the coupling is still high (value = 18) so
  * SuppressWarning is added manually.
  *
  * @SuppressWarnings(PHPMD.CouplingBetweenObjects)
  */
-class Item extends AbstractImportProcessor
+class Item extends AbstractImportProcessor implements BatchPrefetchInterface
 {
     public const MESSAGE_ACTION = 'inventoryitem';
     /**
@@ -98,16 +97,6 @@ class Item extends AbstractImportProcessor
      */
     private $currentPage = 2;
 
-    /**
-     * @param \MageOS\NetSuiteConnector\Product\Model\Import\Item\Mapper $mapper
-     * @param \MageOS\NetSuiteConnector\Product\Model\ConfigProvider\Permissions $permissionHelper
-     * @param \MageOS\NetSuiteConnector\Product\Model\Prefetch\ProcessingItem $prefetchProcessingItem
-     * @param \MageOS\NetSuiteConnector\Core\Model\NetSuite\Service\Management $serviceManagement
-     * @param \Magento\Framework\Model\Context $context
-     * @param \Magento\Catalog\Model\ResourceModel\Product\CollectionFactory $productCollectionFactory
-     * @param \MageOS\NetSuiteConnector\Product\Model\ResourceModel\Repository $netsuiteProductRepository
-     * @param \Magento\Framework\Filesystem $filesystem
-     */
     public function __construct(
         \MageOS\NetSuiteConnector\Product\Model\Import\Item\Mapper $mapper,
         \MageOS\NetSuiteConnector\Product\Model\ConfigProvider\Permissions $permissionHelper,
@@ -224,18 +213,18 @@ class Item extends AbstractImportProcessor
         return $this->mapper->getInstance($inventoryItem)->isMagentoImportable($inventoryItem);
     }
 
-    /**
-     * @param $records
-     */
     public function prefetchProducts($records)
     {
         $this->prefetchProcessingItem->prefetchProducts($records);
     }
 
+    public function prefetch(array $records): void
+    {
+        $this->prefetchProducts($records);
+    }
+
     /**
-     * @param $startDateTime
      * @param bool $fromBeginning
-     * @return bool
      * @throws \Exception
      */
     public function queryNetsuite($startDateTime, $fromBeginning = true)
@@ -326,9 +315,6 @@ class Item extends AbstractImportProcessor
      *  'pageNumber'=> ...,
      *  'totalPages'=> ...
      *  ]
-     * @param string $searchId
-     * @param string $pageNumber
-     * @param string $totalPages
      */
     public function saveCurrentSearchIdAndPage(string $searchId, string $pageNumber, string $totalPages): void
     {
@@ -349,9 +335,6 @@ class Item extends AbstractImportProcessor
         }
     }
 
-    /**
-     * deleting file with search info when we do not need it anymore
-     */
     private function deleteFile(): void
     {
         try {
@@ -364,9 +347,6 @@ class Item extends AbstractImportProcessor
         }
     }
 
-    /**
-     * returns filepath for saving the file with queue process details
-     */
     private function getFilePath(): string
     {
         return Mutex::NETSUITE_TMP_DIR . DIRECTORY_SEPARATOR . self::IMPORT_QUEUE_INFORMATION;

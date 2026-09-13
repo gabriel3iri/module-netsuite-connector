@@ -25,15 +25,11 @@ use Magento\Sales\Api\Data\InvoiceInterface;
 use Magento\Sales\Api\Data\InvoiceItemInterface;
 use Magento\Sales\Api\Data\OrderInterface;
 use Magento\Sales\Api\Data\OrderItemInterface;
-use NetSuite\Classes\CashSale;
 use NetSuite\Classes\Customer;
 use NetSuite\Classes\Record;
 use MageOS\NetSuiteConnector\Core\Exception\NetSuiteRuntimeException;
 use MageOS\NetSuiteConnector\Core\Exception\SkipRecordException;
 
-/**
- * This class creates a magento invoice from cashSale object retrieved from NS
- */
 class ImportInvoice
 {
     /**
@@ -82,17 +78,10 @@ class ImportInvoice
     private $netsuiteProductRepository;
 
     /**
-     * ImportInvoice constructor.
-     * @param \Magento\Sales\Api\Data\InvoiceInterfaceFactory $invoiceFactory
-     * @param \MageOS\NetSuiteConnector\Order\Api\OrderRegistryInterface $orderRegistry
-     * @param \MageOS\NetSuiteConnector\Customer\Model\Mapper\Customer $customerMapperHelper
-     * @param \Magento\Framework\DataObject\Copy $objectCopyService
-     * @param \MageOS\NetSuiteConnector\Customer\Model\Mapper\Address $addressMapperHelper
-     * @param \Magento\Sales\Api\OrderAddressRepositoryInterface $orderAddressRepository
-     * @param \Magento\Sales\Api\Data\InvoiceItemInterfaceFactory $invoiceItemFactory
-     * @param \MageOS\NetSuiteConnector\Order\Model\Config\SalesConfig $salesConfig
-     * @param \MageOS\NetSuiteConnector\Product\Model\ResourceModel\Repository $netsuiteProductRepository
+     * @var \MageOS\NetSuiteConnector\Discount\Model\Invoice\Import\CashSaleDiscount
      */
+    private $cashSaleDiscount;
+
     public function __construct(
         \Magento\Sales\Api\Data\InvoiceInterfaceFactory $invoiceFactory,
         \MageOS\NetSuiteConnector\Order\Api\OrderRegistryInterface $orderRegistry,
@@ -102,7 +91,8 @@ class ImportInvoice
         \Magento\Sales\Api\OrderAddressRepositoryInterface $orderAddressRepository,
         \Magento\Sales\Api\Data\InvoiceItemInterfaceFactory $invoiceItemFactory,
         \MageOS\NetSuiteConnector\Order\Model\Config\SalesConfig $salesConfig,
-        \MageOS\NetSuiteConnector\Product\Model\ResourceModel\Repository $netsuiteProductRepository
+        \MageOS\NetSuiteConnector\Product\Model\ResourceModel\Repository $netsuiteProductRepository,
+        \MageOS\NetSuiteConnector\Discount\Model\Invoice\Import\CashSaleDiscount $cashSaleDiscount
     ) {
         $this->invoiceFactory = $invoiceFactory;
         $this->orderRegistry = $orderRegistry;
@@ -113,13 +103,10 @@ class ImportInvoice
         $this->invoiceItemFactory = $invoiceItemFactory;
         $this->salesConfig = $salesConfig;
         $this->netsuiteProductRepository = $netsuiteProductRepository;
+        $this->cashSaleDiscount = $cashSaleDiscount;
     }
 
     /**
-     * Create magento invoice based on given cashSale data object (retrieved from NS)
-     *
-     * @param Record $cashSale
-     * @return InvoiceInterface
      * @throws NetSuiteRuntimeException
      */
     public function getMagentoFormatFromCashSale(Record $cashSale): InvoiceInterface
@@ -153,7 +140,7 @@ class ImportInvoice
 
         $this->addInvoiceItems($cashSale, $invoice, $magentoOrder);
 
-        $discount = $this->getDiscountAmount($cashSale);
+        $discount = $this->cashSaleDiscount->getAmount($cashSale);
         $tax = $this->getTaxAmount($cashSale);
         $shipping = $this->getShippingAmount($cashSale);
 
@@ -170,9 +157,6 @@ class ImportInvoice
     }
 
     /**
-     * Create and add billing address based on cashSale data from NS
-     *
-     * @param Record $cashSale
      * @param Customer $netsuiteCustomer
      * @param OrderInterface $magentoOrder
      */
@@ -191,9 +175,6 @@ class ImportInvoice
     }
 
     /**
-     * Add invoice items based on cashSale data from NS
-     *
-     * @param Record $cashSale
      * @param InvoiceInterface $invoice
      * @param OrderInterface $magentoOrder
      */
@@ -247,11 +228,7 @@ class ImportInvoice
     }
 
     /**
-     * Prepare order items data for adding to invoice
-     *
-     * @param Record $cashSale
      * @param OrderInterface $magentoOrder
-     * @return array
      */
     private function prepareItemMap(Record $cashSale, $magentoOrder): array
     {
@@ -272,13 +249,10 @@ class ImportInvoice
     }
 
     /**
-     * Create an invoice item for given order item
-     *
      * @param OrderItemInterface $orderItemObject
      * @param float $quantity
      * @param float $rate
      * @param float $taxRate
-     * @return InvoiceItemInterface
      */
     private function createInvoiceItem($orderItemObject, $quantity, $rate, $taxRate): InvoiceItemInterface
     {
@@ -312,8 +286,6 @@ class ImportInvoice
     }
 
     /**
-     * Returns the parent of a specified order item. Returns null if no parent.
-     *
      * @param OrderInterface $magentoOrder
      * @param OrderItemInterface $orderItem
      * @return OrderItemInterface|null
@@ -332,23 +304,6 @@ class ImportInvoice
     }
 
     /**
-     * Returns absolute discount value
-     *
-     * @param CashSale $cashSale
-     * @return float|int
-     *
-     * Plugin Access
-     * @SuppressWarnings(PHPMD.UnusedFormalParameter)
-     */
-    public function getDiscountAmount(Record $cashSale)
-    {
-        return 0;
-    }
-
-    /**
-     * Returns absolute tax value
-     *
-     * @param Record $cashSale
      * @return float|int
      */
     private function getTaxAmount(Record $cashSale)
@@ -357,9 +312,6 @@ class ImportInvoice
     }
 
     /**
-     * Returns shipping amount
-     *
-     * @param Record $cashSale
      * @return float|int
      */
     private function getShippingAmount(Record $cashSale)

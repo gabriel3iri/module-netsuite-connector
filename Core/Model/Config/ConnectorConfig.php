@@ -11,11 +11,6 @@ namespace MageOS\NetSuiteConnector\Core\Model\Config;
 use Magento\Framework\App\Config\ScopeConfigInterface;
 use Magento\Framework\Registry;
 
-/**
- * Provides config options related to NetSuite connection
- *
- * @package MageOS\NetSuiteConnector\Core\Model\Config\Source
- */
 class ConnectorConfig
 {
     private const PATH_HOST = 'mageos_netsuite/general/host';
@@ -38,16 +33,10 @@ class ConnectorConfig
     private $scopeConfig;
 
     /**
-     * Config cache
      * @var array
      */
     private $cache;
 
-    /**
-     * @param ScopeConfigInterface $scopeConfig
-     * @param Registry $registry
-     * @param \Magento\Framework\Encryption\EncryptorInterface $encryptor
-     */
     public function __construct(
         ScopeConfigInterface $scopeConfig,
         private readonly \Magento\Framework\Encryption\EncryptorInterface $encryptor
@@ -57,7 +46,6 @@ class ConnectorConfig
     }
 
     /**
-     * @param string $path
      * @return string
      */
     private function getCached(string $path)
@@ -73,58 +61,36 @@ class ConnectorConfig
         return $value;
     }
 
-    /**
-     * @return bool
-     */
     public function isEnabled(): bool
     {
         return (bool) $this->scopeConfig->getValue(self::PATH_ENABLED);
     }
 
-    /**
-     * @return string
-     */
     public function getHost(): string
     {
         return rtrim((string)$this->getCached(self::PATH_HOST), '/');
     }
 
-    /**
-     * @return string
-     */
     public function getEndpoint(): string
     {
         return (string)$this->getCached(self::PATH_ENDPOINT);
     }
 
-    /**
-     * @return string
-     */
     public function getAccountId(): string
     {
         return (string)$this->getCached(self::PATH_ACCOUNT_ID);
     }
 
-    /**
-     * How many times to retry when we get error from NetSuite
-     * @return int
-     */
     public function getRetriesCount(): int
     {
         return self::ERROR_RETRIES;
     }
 
-    /**
-     * @return int
-     */
     public function getSoapRequestTimeout(): int
     {
         return (int) $this->getCached(self::SOAP_REQUEST_TIMEOUT);
     }
 
-    /**
-     * @return string
-     */
     public function getNetsuiteBaseUrl(): string
     {
         $url = $this->getCached(self::NETSUITE_BASE_URL);
@@ -132,8 +98,6 @@ class ConnectorConfig
     }
 
     /**
-     * @param string $runMode
-     *
      * @return string
      */
     public function getConsumerKey(string $runMode)
@@ -144,8 +108,6 @@ class ConnectorConfig
     }
 
     /**
-     * @param string $runMode
-     *
      * @return string
      */
     public function getConsumerSecret(string $runMode)
@@ -158,8 +120,6 @@ class ConnectorConfig
     }
 
     /**
-     * @param string $runMode
-     *
      * @return string
      */
     public function getTokenId(string $runMode)
@@ -170,8 +130,6 @@ class ConnectorConfig
     }
 
     /**
-     * @param string $runMode
-     *
      * @return string
      */
     public function getTokenSecret(string $runMode)
@@ -183,10 +141,6 @@ class ConnectorConfig
         );
     }
 
-    /**
-     * @param $runMode
-     * @return string
-     */
     public function getSystemConfigPathForRunMode($runMode): string
     {
         switch ($runMode) {
@@ -195,6 +149,9 @@ class ConnectorConfig
                 break;
             case 'export':
                 $configPath = 'connection_export';
+                break;
+            case 'stock':
+                $configPath = \MageOS\NetSuiteConnector\Inventory\Model\Config\StockConfig::CONNECTION_SUBPATH;
                 break;
             default:
                 $configPath = 'general';

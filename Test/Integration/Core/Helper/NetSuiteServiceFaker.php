@@ -17,6 +17,8 @@ class NetSuiteServiceFaker
 
     private $addRequest;
 
+    private $addRequests = [];
+
     private $initializeRequest;
 
     private $updateRequest;
@@ -87,6 +89,7 @@ class NetSuiteServiceFaker
     {
         $this->setCounter('add');
         $this->addRequest = $addRequest;
+        $this->addRequests[] = $addRequest;
         $record = $addRequest->record;
 
         $success = $this->parameters['add_success'];
@@ -128,6 +131,16 @@ class NetSuiteServiceFaker
     public function getAddRequest()
     {
         return $this->addRequest;
+    }
+
+    /**
+     * Every add() request received so far, in call order. getAddRequest() keeps only the last one.
+     *
+     * @return \NetSuite\Classes\AddRequest[]
+     */
+    public function getAddRequests(): array
+    {
+        return $this->addRequests;
     }
 
     public function update(\NetSuite\Classes\UpdateRequest $updateRequest)

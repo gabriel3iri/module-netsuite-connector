@@ -164,6 +164,125 @@ class CashsaleTest extends \PHPUnit\Framework\TestCase
     }
 
     /**
+     * @magentoDataFixtureBeforeTransaction MageOS_NetSuiteConnector::Test/Integration/Core/_files/order.php
+     * @magentoDataFixtureBeforeTransaction MageOS_NetSuiteConnector::Test/Integration/Core/_files/order_set_netsuite_id.php
+     * @magentoDataFixtureBeforeTransaction MageOS_NetSuiteConnector::Test/Integration/Core/_files/invoice_import.php
+     * @magentoConfigFixture default/mageos_netsuite/orders/logic_switch body
+     *
+     * @magentoDbIsolation enabled
+     * @magentoAppIsolation enabled
+     */
+    public function testThatItStoresANumericBodyDiscountRateAsANegativeDiscountAmount()
+    {
+        $parameters = [
+            'netsuite_internal_id' => 11,
+            'get_success' => 1
+        ];
+        self::$netsuiteServiceFaker->setParameters($parameters);
+        $this->setNetSuiteServiceFaker();
+        $objectManager = Bootstrap::getObjectManager();
+
+        $cashSale = NSRecordBuilder::aRecord(CashSale::class)
+            ->withInternalId(1001)
+            ->withCreatedFrom(1)
+            ->withItemList($this->createCashsaleItemList())
+            ->withTotal(20)
+            ->withSubTotal(20)
+            ->withEntity($this->recordRef(1))
+            ->withDiscountRate('5')
+            ->build();
+
+        /** @var \MageOS\NetSuiteConnector\Invoice\Model\Process\Import\Cashsale $cashSaleImport */
+        $cashSaleImport = $objectManager->get(\MageOS\NetSuiteConnector\Invoice\Model\Process\Import\Cashsale::class);
+        $invoiceRegistry = $objectManager->get(\MageOS\NetSuiteConnector\Invoice\Model\InvoiceRegistry::class);
+
+        $cashSaleImport->process($cashSale);
+
+        /** @var Invoice $invoice */
+        $invoice = $invoiceRegistry->getInvoiceByNetSuiteId(1001);
+
+        $this->assertEquals(-5.0, (float)$invoice->getDiscountAmount());
+    }
+
+    /**
+     * @magentoDataFixtureBeforeTransaction MageOS_NetSuiteConnector::Test/Integration/Core/_files/order.php
+     * @magentoDataFixtureBeforeTransaction MageOS_NetSuiteConnector::Test/Integration/Core/_files/order_set_netsuite_id.php
+     * @magentoDataFixtureBeforeTransaction MageOS_NetSuiteConnector::Test/Integration/Core/_files/invoice_import.php
+     * @magentoConfigFixture default/mageos_netsuite/orders/logic_switch body
+     *
+     * @magentoDbIsolation enabled
+     * @magentoAppIsolation enabled
+     */
+    public function testThatItRejectsAPercentBodyDiscountRate()
+    {
+        $parameters = [
+            'netsuite_internal_id' => 11,
+            'get_success' => 1
+        ];
+        self::$netsuiteServiceFaker->setParameters($parameters);
+        $this->setNetSuiteServiceFaker();
+        $objectManager = Bootstrap::getObjectManager();
+
+        $cashSale = NSRecordBuilder::aRecord(CashSale::class)
+            ->withInternalId(1001)
+            ->withCreatedFrom(1)
+            ->withItemList($this->createCashsaleItemList())
+            ->withTotal(20)
+            ->withSubTotal(20)
+            ->withEntity($this->recordRef(1))
+            ->withDiscountRate('10%')
+            ->build();
+
+        /** @var \MageOS\NetSuiteConnector\Invoice\Model\Process\Import\Cashsale $cashSaleImport */
+        $cashSaleImport = $objectManager->get(\MageOS\NetSuiteConnector\Invoice\Model\Process\Import\Cashsale::class);
+
+        $this->expectException(\MageOS\NetSuiteConnector\Core\Exception\DataIntegrityException::class);
+
+        $cashSaleImport->process($cashSale);
+    }
+
+    /**
+     * @magentoDataFixtureBeforeTransaction MageOS_NetSuiteConnector::Test/Integration/Core/_files/order.php
+     * @magentoDataFixtureBeforeTransaction MageOS_NetSuiteConnector::Test/Integration/Core/_files/order_set_netsuite_id.php
+     * @magentoDataFixtureBeforeTransaction MageOS_NetSuiteConnector::Test/Integration/Core/_files/invoice_import.php
+     * @magentoConfigFixture default/mageos_netsuite/orders/logic_switch line
+     * @magentoConfigFixture default/mageos_netsuite/orders/discount_item_id 123
+     *
+     * @magentoDbIsolation enabled
+     * @magentoAppIsolation enabled
+     */
+    public function testThatItStoresTheLineDiscountItemAmountAsANegativeDiscountAmount()
+    {
+        $parameters = [
+            'netsuite_internal_id' => 11,
+            'get_success' => 1
+        ];
+        self::$netsuiteServiceFaker->setParameters($parameters);
+        $this->setNetSuiteServiceFaker();
+        $objectManager = Bootstrap::getObjectManager();
+
+        $cashSale = NSRecordBuilder::aRecord(CashSale::class)
+            ->withInternalId(1001)
+            ->withCreatedFrom(1)
+            ->withItemList($this->createCashsaleItemListWithDiscountLine(123, -3))
+            ->withTotal(20)
+            ->withSubTotal(20)
+            ->withEntity($this->recordRef(1))
+            ->build();
+
+        /** @var \MageOS\NetSuiteConnector\Invoice\Model\Process\Import\Cashsale $cashSaleImport */
+        $cashSaleImport = $objectManager->get(\MageOS\NetSuiteConnector\Invoice\Model\Process\Import\Cashsale::class);
+        $invoiceRegistry = $objectManager->get(\MageOS\NetSuiteConnector\Invoice\Model\InvoiceRegistry::class);
+
+        $cashSaleImport->process($cashSale);
+
+        /** @var Invoice $invoice */
+        $invoice = $invoiceRegistry->getInvoiceByNetSuiteId(1001);
+
+        $this->assertEquals(-3.0, (float)$invoice->getDiscountAmount());
+    }
+
+    /**
      * @magentoDataFixtureBeforeTransaction MageOS_NetSuiteConnector::Test/Integration/Core/_files/order_with_configurable.php
      * @magentoDataFixtureBeforeTransaction MageOS_NetSuiteConnector::Test/Integration/Core/_files/order_set_netsuite_id.php
      * @magentoDataFixtureBeforeTransaction MageOS_NetSuiteConnector::Test/Integration/Core/_files/invoice_import.php
@@ -266,6 +385,27 @@ class CashsaleTest extends \PHPUnit\Framework\TestCase
         $itemList = new CashSaleItemList();
         $itemList->item = [
             $item1
+        ];
+
+        return $itemList;
+    }
+
+    private function createCashsaleItemListWithDiscountLine($discountItemId, $discountAmount)
+    {
+        $item1 = new CashSaleItem();
+        $item1->item = $this->recordRef(1);
+        $item1->quantity = 2;
+        $item1->rate = 10.0;
+        $item1->taxRate1 = 0.0;
+
+        $discountItem = new CashSaleItem();
+        $discountItem->item = $this->recordRef($discountItemId);
+        $discountItem->amount = $discountAmount;
+
+        $itemList = new CashSaleItemList();
+        $itemList->item = [
+            $item1,
+            $discountItem
         ];
 
         return $itemList;

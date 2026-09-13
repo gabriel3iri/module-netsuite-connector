@@ -23,19 +23,11 @@ namespace MageOS\NetSuiteConnector\Tax\Model\Config\Source;
 
 use Magento\Framework\Data\OptionSourceInterface;
 
-/**
- * Class Tax -provides logic options for the tax handling settings
- */
 class Tax implements OptionSourceInterface
 {
-    private const TAX_HANDLING_TAX_ITEM = 'tax_item_line';
-    private const TAX_HANDLING_NETSUITE_SIDE = 'netsuite_processor';
+    public const TAX_HANDLING_TAX_ITEM = 'tax_item_line';
+    public const TAX_HANDLING_NETSUITE_SIDE = 'netsuite_processor';
 
-    /**
-     * Options getter
-     *
-     * @return array
-     */
     public function toOptionArray()
     {
         $options = $this->toArray();
@@ -46,11 +38,6 @@ class Tax implements OptionSourceInterface
         return $ret;
     }
 
-    /**
-     * Get options in "key-value" format
-     *
-     * @return array
-     */
     public function toArray()
     {
         return [

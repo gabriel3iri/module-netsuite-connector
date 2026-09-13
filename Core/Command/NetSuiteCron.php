@@ -27,56 +27,21 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
-/**
- * Class NetSuiteCron - CLI to provide import/export queue processing via cron
- */
 class NetSuiteCron extends AbstractNSCommand
 {
     private const INPUT_KEY_MODE = 'mode';
     private const INPUT_KEY_DEBUG = 'debug';
 
-    /**
-     * @var ConnectorConfig
-     */
-    private $connectorConfig;
-    /**
-     * @var array
-     */
-    private $possibleModes;
-    /**
-     * @var MutexFactory
-     */
-    private $mutexFactory;
-    /**
-     * @var \MageOS\NetSuiteConnector\Core\Registry\ModuleRegistry
-     */
-    private $registry;
-    /**
-     * @var \MageOS\NetSuiteConnector\Core\Model\Process
-     */
-    private $process;
-
-    /**
-     * NetSuiteCron constructor.
-     * @param \MageOS\NetSuiteConnector\Core\Model\Process\Proxy $process
-     * @param \MageOS\NetSuiteConnector\Core\Registry\ModuleRegistry $registry
-     * @param ConnectorConfig $connectorConfig
-     * @param \MageOS\NetSuiteConnector\Core\Model\MutexFactory $mutexFactory
-     * @param array $possibleModes
-     */
     public function __construct(
-        \MageOS\NetSuiteConnector\Core\Model\Process\Proxy $process,// phpcs:ignore
-        \MageOS\NetSuiteConnector\Core\Registry\ModuleRegistry $registry,
-        \MageOS\NetSuiteConnector\Core\Model\Config\ConnectorConfig $connectorConfig,
-        \MageOS\NetSuiteConnector\Core\Model\MutexFactory $mutexFactory,
-        $possibleModes = []
+        private readonly \MageOS\NetSuiteConnector\Core\Model\Process\Proxy $process,// phpcs:ignore
+        private readonly \MageOS\NetSuiteConnector\Core\Registry\ModuleRegistry $registry,
+        private readonly \MageOS\NetSuiteConnector\Core\Model\Config\ConnectorConfig $connectorConfig,
+        private readonly \MageOS\NetSuiteConnector\Core\Model\MutexFactory $mutexFactory,
+        private readonly \MageOS\NetSuiteConnector\Inventory\Model\Process\Import\Stock $stock,
+        private readonly \MageOS\NetSuiteConnector\Inventory\Multi\Model\Process\Import\LocationImportToQueue $locationImportToQueue,
+        private readonly array $possibleModes = []
     ) {
         parent::__construct();
-        $this->connectorConfig = $connectorConfig;
-        $this->mutexFactory = $mutexFactory;
-        $this->registry = $registry;
-        $this->process = $process;
-        $this->possibleModes = $possibleModes;
     }
 
     /**
@@ -103,9 +68,6 @@ class NetSuiteCron extends AbstractNSCommand
     }
 
     /**
-     * @param InputInterface $input
-     * @param OutputInterface $output
-     * @return int
      * @throws LocalizedException
      */
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -136,17 +98,13 @@ class NetSuiteCron extends AbstractNSCommand
         return 0;
     }
 
-    /**
-     * Process import/export mode.
-     *
-     * @param string $mode
-     */
     public function processMode(string $mode): void
     {
         switch ($mode) {
             case 'all':
                 $this->processImport();
                 $this->processExport();
+                $this->processStock();
                 break;
             case 'import':
                 $this->processImport();
@@ -159,6 +117,12 @@ class NetSuiteCron extends AbstractNSCommand
                 break;
             case 'processQueue':
                 $this->processImportQueue();
+                break;
+            case 'stock':
+                $this->processStock();
+                break;
+            case 'location':
+                $this->processLocationImportToQueue();
                 break;
         }
     }
@@ -202,9 +166,18 @@ class NetSuiteCron extends AbstractNSCommand
     }
 
     /**
-     * @param InputInterface $input
-     * @return array|null
+     * No try block: Stock::process() guards permissions, the run schedule and its own errors.
      */
+    protected function processStock(): void
+    {
+        $this->stock->process();
+    }
+
+    protected function processLocationImportToQueue(): void
+    {
+        $this->locationImportToQueue->execute();
+    }
+
     protected function getModes(InputInterface $input): ?array
     {
         $result = null;

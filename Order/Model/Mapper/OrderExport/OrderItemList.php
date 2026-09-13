@@ -21,32 +21,43 @@ declare(strict_types=1);
 
 namespace MageOS\NetSuiteConnector\Order\Model\Mapper\OrderExport;
 
+use Magento\Catalog\Api\Data\ProductInterface;
+use Magento\Sales\Api\Data\OrderInterface;
+use Magento\Sales\Api\Data\OrderItemInterface;
 use NetSuite\Classes\SalesOrder;
 use NetSuite\Classes\SalesOrderItem;
 use NetSuite\Classes\SalesOrderItemList;
+use MageOS\NetSuiteConnector\Order\Model\Export\OrderItemProcessorInterface;
 
-/**
- * This class is responsible for managing NS itemList inside NS order
- */
-class OrderItemList
+class OrderItemList implements OrderItemProcessorInterface
 {
-    /**
-     * Create empty itemList object for NS order
-     *
-     * @param SalesOrder $netsuiteOrder
-     */
+    public function __construct(
+        private readonly \Magento\Framework\Event\ManagerInterface $eventManager
+    ) {
+    }
+
+    public function processItem(
+        SalesOrder $netsuiteOrder,
+        SalesOrderItem $netsuiteItem,
+        OrderItemInterface $magentoItem,
+        ProductInterface $product,
+        OrderInterface $magentoOrder
+    ): void {
+        $this->eventManager->dispatch('netsuite_new_order_item_send_before', [
+            'magento_order' => $magentoOrder,
+            'netsuite_order' => $netsuiteOrder,
+            'magento_order_item' => $magentoItem,
+            'netsuite_order_item' => $netsuiteItem
+        ]);
+        $this->addOrderItemToList($netsuiteOrder, $netsuiteItem);
+    }
+
     public function initOrderItemList(SalesOrder $netsuiteOrder)
     {
         $netsuiteOrder->itemList = new SalesOrderItemList();
         $netsuiteOrder->itemList->item = [];
     }
 
-    /**
-     * Add given NS order item to itemList object inside NS order
-     *
-     * @param SalesOrder $netsuiteOrder
-     * @param SalesOrderItem $netsuiteOrderItem
-     */
     public function addOrderItemToList(SalesOrder $netsuiteOrder, SalesOrderItem $netsuiteOrderItem)
     {
         if (!$netsuiteOrder->itemList || !$netsuiteOrder->itemList->item) {

@@ -22,19 +22,48 @@
 namespace MageOS\NetSuiteConnector\Product\Model\Product\Import\Type;
 
 /**
- * This class extends the core class adds a getter for protected property to be used in plugin.
- * The way of extending with plugin chosen to make the rewrite more indepentent from core class
+ * The constructor copies the signature of the Magento parent and breaks when core changes it.
  *
  * @SuppressWarnings(PHPMD)
  */
 class Configurable extends \Magento\ConfigurableImportExport\Model\Import\Product\Type\Configurable
 {
-    /**
-     * Method returns superAttribute Data that will be used b
-     * @return mixed
-     */
+    public function __construct(
+        \Magento\Eav\Model\ResourceModel\Entity\Attribute\Set\CollectionFactory $attrSetColFac,
+        \Magento\Catalog\Model\ResourceModel\Product\Attribute\CollectionFactory $prodAttrColFac,
+        \Magento\Framework\App\ResourceConnection $resource,
+        array $params,
+        \Magento\Catalog\Model\ProductTypes\ConfigInterface $productTypesConfig,
+        \Magento\ImportExport\Model\ResourceModel\Helper $resourceHelper,
+        \Magento\Catalog\Model\ResourceModel\Product\CollectionFactory $_productColFac,
+        private readonly \MageOS\NetSuiteConnector\Product\Model\Product\Import\Type\Configurable\RedundantLinkCleaner $redundantLinkCleaner,
+        ?\Magento\Framework\EntityManager\MetadataPool $metadataPool = null,
+        ?\Magento\CatalogImportExport\Model\Import\Product\SkuStorage $skuStorage = null,
+        ?\Magento\Eav\Model\ResourceModel\Entity\Attribute\Option\CollectionFactory $attributeOptionCollectionFactory = null
+    ) {
+        parent::__construct(
+            $attrSetColFac,
+            $prodAttrColFac,
+            $resource,
+            $params,
+            $productTypesConfig,
+            $resourceHelper,
+            $_productColFac,
+            $metadataPool,
+            $skuStorage,
+            $attributeOptionCollectionFactory
+        );
+    }
+
     public function getSuperAttributeData()
     {
         return $this->_superAttributesData;
+    }
+
+    public function saveData()
+    {
+        parent::saveData();
+        $this->redundantLinkCleaner->clean($this->getSuperAttributeData());
+        return $this;
     }
 }

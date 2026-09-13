@@ -1,0 +1,49 @@
+<?php
+if (!isset($success)) {
+    throw new \Exception(sprintf('file %s missing $success', __FILE__));
+}
+
+$response = new \NetSuite\Classes\InitializeResponse();
+$response->readResponse = new \NetSuite\Classes\ReadResponse();
+$response->readResponse->status = new \NetSuite\Classes\Status();
+
+if ($success == 1) {
+    $response->readResponse->status->isSuccess = true;
+
+    $cashSale = new \NetSuite\Classes\CashSale();
+    $cashSale->createdFrom = new \NetSuite\Classes\RecordRef();
+    $cashSale->createdFrom->internalId = '1';
+    $cashSale->createdFrom->type = \NetSuite\Classes\RecordType::salesOrder;
+
+    $productItem = new \NetSuite\Classes\CashSaleItem();
+    $productItem->item = new \NetSuite\Classes\RecordRef();
+    $productItem->item->internalId = '1';
+    $productItem->quantity = 2;
+    $productItem->rate = '10.00';
+    $productItem->amount = 20.0;
+    $productItem->taxRate1 = 8.25;
+    $productItem->isTaxable = true;
+
+    $discountItem = new \NetSuite\Classes\CashSaleItem();
+    $discountItem->item = new \NetSuite\Classes\RecordRef();
+    $discountItem->item->internalId = '123';
+    $discountItem->rate = '-5.00%';
+    $discountItem->amount = -1.0;
+    $discountItem->description = 'magento-discount';
+    $discountItem->isTaxable = false;
+
+    $itemList = new \NetSuite\Classes\CashSaleItemList();
+    $itemList->item = [$productItem, $discountItem];
+    $itemList->replaceAll = true;
+    $cashSale->itemList = $itemList;
+
+    $response->readResponse->record = $cashSale;
+} else {
+    $response->readResponse->status->isSuccess = false;
+    $response->readResponse->status->statusDetail = [];
+    $response->readResponse->status->statusDetail[0] = new \NetSuite\Classes\StatusDetail();
+    $response->readResponse->status->statusDetail[0]->code = 'unknown_code';
+    $response->readResponse->status->statusDetail[0]->message = 'unknown_message';
+}
+
+return $response;

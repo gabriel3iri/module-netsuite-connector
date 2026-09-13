@@ -18,6 +18,7 @@
 
 namespace MageOS\NetSuiteConnector\Test\Unit\Discount\Model\Config;
 
+use MageOS\NetSuiteConnector\Core\Exception\ConnectorRuntimeException;
 use MageOS\NetSuiteConnector\Core\Model\Config\ConfigurationResolver;
 use MageOS\NetSuiteConnector\Core\Model\Config\ConfigurationResolverFactory;
 use MageOS\NetSuiteConnector\Discount\Model\Config\DiscountConfig;
@@ -159,6 +160,34 @@ class DiscountConfigTest extends TestCase
         $this->assertSame('body', $config->getLogicSwitch());
     }
 
+    public function testOnlyTheConfiguredLogicSwitchIsActive(): void
+    {
+        $config = $this->createConfig(['mageos_netsuite/orders/logic_switch' => LogicSwitcher::LINE]);
+
+        $this->assertTrue($config->isLogicSwitchActive(LogicSwitcher::LINE));
+        $this->assertFalse($config->isLogicSwitchActive(LogicSwitcher::BODY));
+    }
+
+    public function testNoLogicSwitchIsActiveWhenDiscountsAreSkipped(): void
+    {
+        $config = $this->createConfig([
+            'mageos_netsuite/orders/logic_switch' => 'unknown',
+            'mageos_netsuite/orders/order_skip_discount' => '1',
+        ]);
+
+        $this->assertFalse($config->isLogicSwitchActive(LogicSwitcher::LINE));
+    }
+
+    public function testAnUnknownLogicSwitchThrows(): void
+    {
+        $config = $this->createConfig(['mageos_netsuite/orders/logic_switch' => 'unknown']);
+
+        $this->expectException(ConnectorRuntimeException::class);
+        $this->expectExceptionMessage('Discount Provider mismatch with Interface!');
+
+        $config->isLogicSwitchActive(LogicSwitcher::LINE);
+    }
+
     /**
      * Build the subject with a scope config stub that answers only the given paths.
      *
@@ -186,6 +215,6 @@ class DiscountConfigTest extends TestCase
             )
         );
 
-        return new DiscountConfig($factory);
+        return new DiscountConfig($factory, new LogicSwitcher());
     }
 }

@@ -22,44 +22,28 @@ declare(strict_types=1);
 namespace MageOS\NetSuiteConnector\Tax\Model\Invoice\Export\TaxManager;
 
 use Magento\Sales\Api\Data\InvoiceInterface;
+use Magento\Sales\Api\Data\OrderInterface;
 use NetSuite\Classes\CashSale;
 use NetSuite\Classes\CashSaleItem;
 use NetSuite\Classes\RecordRef;
-use MageOS\NetSuiteConnector\Tax\Model\Invoice\Export\TaxManagerInterface;
+use MageOS\NetSuiteConnector\Invoice\Model\Export\CashSaleProcessorInterface;
+use MageOS\NetSuiteConnector\Tax\Model\Config\Source\Tax as TaxLogic;
 
 /**
- * TaxItemLine - tax manager that implements next logic for tax handling:
- * # taxes are processed on the Mangeto side
- * # connector collects tax info
- * # adds special TaxItem to the Cash Sale to match totals of the order in NetSuite and Magento
+ * The netsuite_processor tax logic adds nothing to a CashSale, so it has no invoice step.
  */
-class TaxItemLine implements TaxManagerInterface
+class TaxItemLine implements CashSaleProcessorInterface
 {
     private const ITEM_DESCRIPTION = 'Sales tax';
 
-    /**
-     * @var \MageOS\NetSuiteConnector\Tax\Model\Config\Tax
-     */
-    private $taxConfig;
-
-    /**
-     * TaxItem constructor.
-     * @param \MageOS\NetSuiteConnector\Tax\Model\Config\Tax $taxConfig
-     */
-    public function __construct(\MageOS\NetSuiteConnector\Tax\Model\Config\Tax $taxConfig)
-    {
-        $this->taxConfig = $taxConfig;
+    public function __construct(
+        private readonly \MageOS\NetSuiteConnector\Tax\Model\Config\Tax $taxConfig
+    ) {
     }
 
-    /**
-     * Add Taxes information to the NetSuite CacheSale
-     *
-     * @param CashSale $cashSale
-     * @param $magentoInvoice
-     */
-    public function addTax(CashSale $cashSale, InvoiceInterface $magentoInvoice): void
+    public function process(CashSale $cashSale, InvoiceInterface $magentoInvoice, OrderInterface $magentoOrder): void
     {
-        if ($this->taxConfig->getSkipTax()) {
+        if (!$this->taxConfig->isTaxLogicActive(TaxLogic::TAX_HANDLING_TAX_ITEM, 'invoice_export')) {
             return;
         }
         foreach ($cashSale->itemList->item as $item) {
@@ -67,18 +51,11 @@ class TaxItemLine implements TaxManagerInterface
         }
         $taxAmount = (float)$magentoInvoice->getTaxAmount();
         if ($taxAmount) {
-            $taxItem = $this->createNSTaxItem($taxAmount);
-            $cashSale->itemList->item[] = $taxItem;
+            $cashSale->itemList->item[] = $this->createNSTaxItem($taxAmount);
             $cashSale->itemList->item = array_values($cashSale->itemList->item);
         }
     }
 
-    /**
-     * Create NS cashSaleItem for tax amount
-     *
-     * @param float $taxAmount
-     * @return CashSaleItem
-     */
     private function createNSTaxItem(float $taxAmount): CashSaleItem
     {
         $taxItem = new CashSaleItem();

@@ -19,19 +19,23 @@
 
 namespace MageOS\NetSuiteConnector\Order\Model\Mapper\OrderExport;
 
+use Magento\Sales\Api\Data\OrderInterface;
 use NetSuite\Classes\RecordRef;
 use NetSuite\Classes\RecordType;
 use NetSuite\Classes\SalesOrder;
 use NetSuite\Classes\SalesOrderItem;
+use MageOS\NetSuiteConnector\Order\Model\Export\OrderProcessorInterface;
 
-/**
- * This class is responsible for adding NS Location to NS order items. This is used for a magento order export.
- */
-class Location
+class Location implements OrderProcessorInterface
 {
     public function __construct(
         private readonly \MageOS\NetSuiteConnector\Order\Model\Config\SalesConfig $salesConfig
     ) {
+    }
+
+    public function process(SalesOrder $netsuiteOrder, OrderInterface $magentoOrder): void
+    {
+        $this->addLocation($netsuiteOrder);
     }
 
     public function addLocation(SalesOrder | SalesOrderItem $netsuiteItem): void

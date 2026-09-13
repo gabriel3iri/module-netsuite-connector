@@ -22,12 +22,7 @@ namespace MageOS\NetSuiteConnector\Discount\Model\Config\Source;
 class LogicSwitcher implements \Magento\Framework\Option\ArrayInterface
 {
     public const BODY = 'body';
-    private const LINE = 'line';
-    /**
-     * Options getter
-     *
-     * @return array
-     */
+    public const LINE = 'line';
     public function toOptionArray()
     {
         return [

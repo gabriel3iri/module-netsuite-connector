@@ -334,9 +334,21 @@ class ConnectorConfigTest extends TestCase
                 'general',
             ],
             'unknown run mode uses the general connection' => [
-                'stock',
+                'unrecognized',
                 'mageos_netsuite/general/same',
                 '0',
+                'general',
+            ],
+            'stock with dedicated connection' => [
+                'stock',
+                'mageos_netsuite/connection_stock/same',
+                '0',
+                'connection_stock',
+            ],
+            'stock sharing the general connection' => [
+                'stock',
+                'mageos_netsuite/connection_stock/same',
+                '1',
                 'general',
             ],
         ];

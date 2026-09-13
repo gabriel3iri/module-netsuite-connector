@@ -23,9 +23,11 @@ namespace MageOS\NetSuiteConnector\Test\Integration\Customer\Model\Process\Expor
 use Magento\Customer\Api\CustomerRepositoryInterface;
 use Magento\TestFramework\Helper\Bootstrap;
 use NetSuite\Classes\AddRequest;
+use NetSuite\Classes\BooleanCustomFieldRef;
 use MageOS\NetSuiteConnector\Core\Api\Data\MessageInterface;
 use MageOS\NetSuiteConnector\Core\Enum\Message\Queue;
 use MageOS\NetSuiteConnector\Test\Integration\Core\Fixtures\Locator;
+use MageOS\NetSuiteConnector\Test\Integration\Core\Helper\RequestSnapshot;
 
 // @codingStandardsIgnoreStart
 /**
@@ -220,6 +222,62 @@ class CustomerSaveTest extends \PHPUnit\Framework\TestCase
         );
         $updateRequest->record->entityId = null;
         $this->assertEquals($expectedUpdateRequest, $updateRequest);
+    }
+
+    /**
+     * CustomerImportConfig caches a resolved value for the lifetime of its shared instance, so
+     * setCacheEnabled(false) is required here to make this test observe the config fixture below
+     * instead of a value an earlier test in this class already cached for the same config path.
+     *
+     * @magentoDataFixture MageOS_NetSuiteConnector::Test/Integration/Core/_final/_files/customer.php
+     * @magentoDataFixture MageOS_NetSuiteConnector::Test/Integration/Core/_final/_files/customer_address.php
+     * @magentoConfigFixture default/mageos_netsuite/products/price_level_map  {"_1577106127149_149":{"customer_group":"1","price_level":"5"}}
+     * @magentoConfigFixture default/mageos_netsuite/customers_import/is_importable_field_id custentity_importable
+     * @magentoDbIsolation enabled
+     * @magentoAppIsolation enabled
+     */
+    public function testProcessNewCustomerIsImportable()
+    {
+        $parameters = [
+            'by_field' => 'externalIdString',
+            'search_success' => 0,
+            'netsuite_internal_id' => 21,
+            'add_success' => 1
+        ];
+        self::$netsuiteServiceFaker->setParameters($parameters);
+        $this->setNetSuiteServiceFaker();
+
+        $this->objectManager->get(\MageOS\NetSuiteConnector\CustomerImport\Model\Config\CustomerImportConfig::class)
+            ->setCacheEnabled(false);
+
+        $message = $this->getMessage();
+
+        $customerSaveProcess = $this->objectManager->create(\MageOS\NetSuiteConnector\Customer\Model\Process\Export\CustomerSave::class);
+        $customerSaveProcess->process($message);
+
+        /** @var AddRequest $addRequest */
+        $addRequest = self::$netsuiteServiceFaker->getAddRequest();
+
+        $importableField = null;
+        foreach ($addRequest->record->customFieldList->customField as $customField) {
+            if ($customField instanceof BooleanCustomFieldRef
+                && $customField->scriptId === 'custentity_importable'
+            ) {
+                $importableField = $customField;
+            }
+        }
+        $this->assertNotNull($importableField, 'Expected a BooleanCustomFieldRef for the is_importable field.');
+        $this->assertTrue($importableField->value);
+
+        $addRequest->record->addressbookList->addressbook[0]->addressbookAddress->customFieldList->customField[0]->value = null;
+
+        /** @var RequestSnapshot $requestSnapshot */
+        $requestSnapshot = $this->objectManager->create(RequestSnapshot::class);
+        $requestSnapshot->assertRecordMatches(
+            __DIR__ . '/../../../_files_ns_request/Customer-new-importable',
+            $addRequest,
+            []
+        );
     }
 
     /*

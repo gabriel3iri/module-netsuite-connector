@@ -40,6 +40,7 @@ class NetSuiteServiceFakerTest extends TestCase
         '__construct',
         'setParameters',
         'getAddRequest',
+        'getAddRequests',
         'getUpdateRequest',
         'getInitializeRequest',
     ];

@@ -23,45 +23,16 @@ namespace MageOS\NetSuiteConnector\Shipment\Model\Mapper;
 use Magento\Sales\Api\Data\ShipmentTrackInterface;
 use NetSuite\Classes\Record;
 
-/**
- * This class is responsible for converting NS shipping track data into magento tracking
- */
 class TrackingNumber
 {
-    /**
-     * @var \Magento\Sales\Api\Data\ShipmentTrackInterfaceFactory
-     */
-    private $shipmentTrackFactory;
-
-    /**
-     * @var \MageOS\NetSuiteConnector\Shipment\Model\Config\ShippingConfig
-     */
-    private $shippingConfig;
-
-    /**
-     * Trackingnumber constructor.
-     * @param \Magento\Sales\Api\Data\ShipmentTrackInterfaceFactory $shipmentTrackFactory
-     * @param \MageOS\NetSuiteConnector\Shipment\Model\Config\ShippingConfig $shippingConfig
-     */
     public function __construct(
-        \Magento\Sales\Api\Data\ShipmentTrackInterfaceFactory $shipmentTrackFactory,
-        \MageOS\NetSuiteConnector\Shipment\Model\Config\ShippingConfig $shippingConfig
+        private readonly \Magento\Sales\Api\Data\ShipmentTrackInterfaceFactory $shipmentTrackFactory,
+        private readonly \MageOS\NetSuiteConnector\Shipment\Model\Config\ShippingConfig $shippingConfig,
+        private readonly \MageOS\NetSuiteConnector\Inventory\Model\Config\InventoryMode $inventoryMode,
+        private readonly \MageOS\NetSuiteConnector\Shipment\MultiSource\Model\Mapper\TrackingNumber\ItemCustomFieldNormalizer $itemCustomFieldNormalizer
     ) {
-        $this->shipmentTrackFactory = $shipmentTrackFactory;
-        $this->shippingConfig = $shippingConfig;
     }
 
-    /**
-     * Retrieve tracking numbers data from NS shipment object.
-     * Four tracking providers supported:
-     * default
-     * FedEx
-     * Ups
-     * Usps
-     * Each has its own format in the Shipment
-     * @param Record $netsuiteShipment
-     * @return array
-     */
     public function getNormalizedTrackingNumberData(Record $netsuiteShipment): array
     {
         //NetSuite will store packages in different data structures based on the shipping carrier.
@@ -90,14 +61,16 @@ class TrackingNumber
             }
         }
 
+        if ($this->inventoryMode->isMulti()) {
+            return $this->itemCustomFieldNormalizer->normalize($netsuiteShipment, $trackingNumbers);
+        }
+
         return $trackingNumbers;
     }
 
     /**
-     * Convert tracking data from NS into magento tracking object
-     *
      * @param array $trackData
-     * @param Record; $shipMethod
+     * @param Record $shipMethod
      * @return ShipmentTrackInterface
      */
     public function getMagentoFormat($trackData, $shipMethod)
@@ -113,8 +86,6 @@ class TrackingNumber
     }
 
     /**
-     * Get magento carrier code for given NS carrier
-     *
      * @param int $internalNetsuiteId
      * @return string
      */

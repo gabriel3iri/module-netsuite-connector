@@ -29,6 +29,7 @@ use MageOS\NetSuiteConnector\Core\Model\Config\QueueConfig;
 use MageOS\NetSuiteConnector\Core\Model\NetSuite\LastUpdateManager;
 use MageOS\NetSuiteConnector\Core\Model\Process\ExportProcessor;
 use MageOS\NetSuiteConnector\Core\Model\Process\ImportProcessor;
+use MageOS\NetSuiteConnector\Core\Model\Process\Import\BatchPrefetchInterface;
 
 /**
  * Refactor #2. Not much more to Decouple without major rewrite. Ignoring it for now.
@@ -87,18 +88,6 @@ class Process
     private \MageOS\NetSuiteConnector\Core\Api\MessageManagementInterface $messageManagement;
 
     /**
-     * Process constructor.
-     * @param ImportQueueManager $importManager
-     * @param QueueConfig $queueConfig
-     * @param ImportProcessor $importProcessor
-     * @param ExportProcessor $exportProcessor
-     * @param NetSuite\LastUpdateManager $lastUpdateManager
-     * @param \Magento\Framework\Model\Context $context
-     * @param ProcessManagement $processManagement
-     * @param Config\ConnectorConfig $connectorConfig
-     * @param NetSuite\ServiceRepository $serviceRepository
-     * @param \MageOS\NetSuiteConnector\Core\Model\Logger\Logger $logger
-     *
      * Refactor number #2. I've cut down to half but less then that and whole file needs to be rewritten.
      * Ignoring the parameter list size for now.
      * @SuppressWarnings(PHPMD.ExcessiveParameterList)
@@ -171,16 +160,6 @@ class Process
         $this->lastUpdateManager->setLastUpdateDate(LastUpdateManager::IMPORT_FLAG, $time);
     }
 
-    /**
-     * Hook for plugins
-     *
-     * @param array $messages
-     * @SuppressWarnings("unused")
-     */
-    public function beforeProcessImportBatchData($messages)// phpcs:ignore
-    {
-    }
-
     public function processImportQueue()
     {
         if (!$this->connectorConfig->isEnabled()) {
@@ -210,7 +189,7 @@ class Process
             }
 
             try {
-                $this->beforeProcessImportBatchData($messages);
+                $this->prefetch($messages);
                 $this->logger->addInfo('Processing import queue. Size: ' . count($messages));
 
                 $messagesToDelete = $this->importMessages($messages);
@@ -248,6 +227,21 @@ class Process
                 );
             }
 
+        }
+    }
+
+    private function prefetch(array $messages): void
+    {
+        $recordsByAction = [];
+        foreach ($messages as $message) {
+            $recordsByAction[$message->getAction()][] = $message->getObject();
+        }
+
+        foreach ($recordsByAction as $action => $records) {
+            $processor = $this->importProcessor->getEntityProcessor($action);
+            if ($processor instanceof BatchPrefetchInterface) {
+                $processor->prefetch($records);
+            }
         }
     }
 
@@ -324,19 +318,11 @@ class Process
         $this->lastUpdateManager->setLastUpdateDate(LastUpdateManager::EXPORT_FLAG, $time);
     }
 
-    /**
-     * return void
-     */
     public function resetProcessedOperations()
     {
         $this->_processedOperatios = [];
     }
 
-    /**
-     * @param $queueMessage
-     * @param \Throwable $ex
-     * @return void
-     */
     private function processException($queueMessage, \Throwable $ex): string
     {
         $message = [];
@@ -348,10 +334,6 @@ class Process
         return $message;
     }
 
-    /**
-     * @param array $messages
-     * @return array
-     */
     private function importMessages(array $messages): array
     {
         /**
@@ -420,11 +402,6 @@ class Process
         return $messagesToDelete;
     }
 
-    /**
-     * @param array $messagesToDelete
-     * @param array $importErrors
-     * @param $queue
-     */
     private function deleteMessages(array $messagesToDelete, array $importErrors): void
     {
         foreach ($messagesToDelete as $internalId => $message) {

@@ -23,10 +23,6 @@ use MageOS\NetSuiteConnector\Core\Exception\MessageProcessor;
 use MageOS\NetSuiteConnector\Core\Model\NetSuite\ConvertDate;
 use MageOS\NetSuiteConnector\Inventory\Model\Config\StockConfig;
 
-/**
- * Class Process provides feature to run stock update process. This functionality is supposed to be run by cron.
- * See MageOS\NetSuiteConnector\Inventory\Plugin\NetSuiteCronPlugin::afterProcessMode
- */
 class Stock
 {
     private \MageOS\NetSuiteConnector\Inventory\Model\ConfigProvider\Permissions $stockUpdatePermissions;
@@ -36,15 +32,6 @@ class Stock
     private \MageOS\NetSuiteConnector\Core\Model\Logger\Logger $logger;
     private \MageOS\NetSuiteConnector\Inventory\Model\Config\StockConfig $stockConfig;
 
-    /**
-     * Stock constructor.
-     * @param \MageOS\NetSuiteConnector\Core\Model\NetSuite\LastUpdateManager $lastUpdateManager
-     * @param \MageOS\NetSuiteConnector\Core\Model\NetSuite\Service\Repository $serviceRepository
-     * @param \MageOS\NetSuiteConnector\Inventory\Model\ConfigProvider\Permissions $stockUpdatePermissions
-     * @param \MageOS\NetSuiteConnector\Inventory\Model\NetSuiteInventoryRepository $netSuiteInventoryRepository
-     * @param \MageOS\NetSuiteConnector\Core\Model\Logger\Logger $logger
-     * @param \MageOS\NetSuiteConnector\Inventory\Model\Config\StockConfig $stockConfig
-     */
     public function __construct(
         \MageOS\NetSuiteConnector\Core\Model\NetSuite\LastUpdateManager $lastUpdateManager,
         \MageOS\NetSuiteConnector\Core\Model\NetSuite\Service\Repository $serviceRepository,
@@ -62,14 +49,6 @@ class Stock
         $this->stockConfig = $stockConfig;
     }
 
-    /**
-     * Run the import for stock updates
-     *
-     * This method checks availability, permission and the next scheduled run date, performs import and save actual
-     * import date (using magento flags functionality)
-     *
-     * @return void
-     */
     public function process(): void
     {
         try {

@@ -21,11 +21,10 @@ declare(strict_types=1);
 
 namespace MageOS\NetSuiteConnector\Tax\Model\Config;
 
+use MageOS\NetSuiteConnector\Core\Exception\ConfigurationException;
 use MageOS\NetSuiteConnector\Core\Model\Config\AbstractConfig;
 
 /**
- * This class provides access to configuration for Taxes
- *
  * @method int getTaxItemInternalNetsuiteId
  * @method int getNotTaxableInternalNetsuiteId
  * @method string getTaxLogic
@@ -44,9 +43,30 @@ class Tax extends AbstractConfig
     private const NETSUITE_SHIPPING_TAX_ID = 'mageos_netsuite/tax/netsuite_shipping_tax_id';
     private const SKIP_TAX = 'mageos_netsuite/tax/skip_tax';
 
+    public function __construct(
+        \MageOS\NetSuiteConnector\Core\Model\Config\ConfigurationResolverFactory $configFactory,
+        private readonly \MageOS\NetSuiteConnector\Tax\Model\Config\Source\Tax $taxLogicSource
+    ) {
+        parent::__construct($configFactory);
+    }
+
     /**
-     * @return array
+     * @throws ConfigurationException when tax is not skipped and tax_logic is not an option of the admin source model
      */
+    public function isTaxLogicActive(string $taxLogic, string $taxManager): bool
+    {
+        if ($this->getSkipTax()) {
+            return false;
+        }
+        $configuredTaxLogic = (string)$this->getTaxLogic();
+        if (!array_key_exists($configuredTaxLogic, $this->taxLogicSource->toArray())) {
+            throw new ConfigurationException(
+                "There is no Tax Logic set for $taxManager tax manager. Please check NSC configuration."
+            );
+        }
+        return $configuredTaxLogic === $taxLogic;
+    }
+
     public function getOptionsMap(): array
     {
         return [
