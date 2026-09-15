@@ -68,7 +68,7 @@ class FormDataProvider extends \Magento\Ui\DataProvider\AbstractDataProvider
                 \IntlDateFormatter::MEDIUM,
                 \IntlDateFormatter::MEDIUM
             );
-            $row['overwrite_payload'] = (bool)$row['overwrite_payload'];
+            $row['overwrite_payload'] = (int)$row['overwrite_payload'];
 
             if (!empty($row['payload'])) {
                 $row['payload'] = json_encode(json_decode($row['payload']), JSON_PRETTY_PRINT);

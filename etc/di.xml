@@ -621,6 +621,10 @@
         <plugin name="disable_redundant_reservation"
                 type="MageOS\NetSuiteConnector\Inventory\Plugin\DisableReservation"/>
     </type>
+    <type name="Magento\InventoryShipping\Observer\SourceDeductionProcessor">
+        <plugin name="disable_redundant_source_deduction"
+                type="MageOS\NetSuiteConnector\Inventory\Plugin\DisableSourceDeduction"/>
+    </type>
     <preference for="MageOS\NetSuiteConnector\Inventory\Model\MagentoInventoryRepositoryInterface"
                 type="MageOS\NetSuiteConnector\Inventory\Model\InventoryRepositoryResolver"/>
     <preference for="MageOS\NetSuiteConnector\Inventory\Model\NetSuiteInventoryRepository\StockDataTransformationInterface"

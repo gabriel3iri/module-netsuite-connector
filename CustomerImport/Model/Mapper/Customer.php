@@ -76,7 +76,9 @@ class Customer
         $magentoCustomer->setLastname($nsCustomer->lastName);
 
         $magentoCustomer->setCustomAttribute('netsuite_internal_id', $nsCustomer->internalId);
-        $magentoCustomer->setAddresses($this->addressMapping->getMagentoFormat($nsCustomer));
+        $magentoCustomer->setAddresses(
+            $this->addressMapping->getMagentoFormat($nsCustomer, $magentoCustomer->getAddresses() ?? [])
+        );
 
         return $magentoCustomer;
     }

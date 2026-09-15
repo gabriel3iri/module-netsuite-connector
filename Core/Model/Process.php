@@ -135,29 +135,44 @@ class Process
         }
 
         $time = $this->serviceRepository->getServerTime();
-        $updatedFrom = $this->getUpdatedFromDateInNetsuiteFormat();
 
         $importableEntities = $this->importProcessor->getImportableEntities();
 
-        /** @var \MageOS\NetSuiteConnector\Product\Model\Process\Import\Item|\MageOS\NetSuiteConnector\Core\Model\Process\Import\AbstractImportProcessor $importableEntityModel */
-        foreach ($importableEntities as $importableEntityModel) {
+        $allEntitiesSucceeded = true;
+
+        foreach ($importableEntities as $entityCode => $importableEntityModel) {
+            /** @var \MageOS\NetSuiteConnector\Product\Model\Process\Import\Item|\MageOS\NetSuiteConnector\Core\Model\Process\Import\AbstractImportProcessor $importableEntityModel */
             if (!$importableEntityModel->isActive()) {
                 continue;
             }
 
-            $fromBeginning = true;
-            while ($records = $importableEntityModel->queryNetsuite($updatedFrom, $fromBeginning)) {
-                $fromBeginning = false;
+            try {
+                $entityFlag = LastUpdateManager::IMPORT_FLAG . '_' . $entityCode;
+                $updatedFrom = $this->getUpdatedFromDateInNetsuiteFormat($entityFlag);
+                $fromBeginning = true;
+                while ($records = $importableEntityModel->queryNetsuite($updatedFrom, $fromBeginning)) {
+                    $fromBeginning = false;
 
-                if (!is_array($records)) {
-                    continue;
+                    if (!is_array($records)) {
+                        continue;
+                    }
+
+                    $this->processManagement->processRecords($importableEntityModel, $records);
                 }
 
-                $this->processManagement->processRecords($importableEntityModel, $records);
+                $this->lastUpdateManager->setLastUpdateDate($entityFlag, $time);
+            } catch (\Throwable $e) {
+                $allEntitiesSucceeded = false;
+                $this->logger->addError(
+                    'Error importing entity type ' . $importableEntityModel->getRecordType() . ': ' .
+                    implode(' | ', MessageProcessor::getMessages($e))
+                );
             }
         }
 
-        $this->lastUpdateManager->setLastUpdateDate(LastUpdateManager::IMPORT_FLAG, $time);
+        if ($allEntitiesSucceeded) {
+            $this->lastUpdateManager->setLastUpdateDate(LastUpdateManager::IMPORT_FLAG, $time);
+        }
     }
 
     public function processImportQueue()
@@ -245,9 +260,10 @@ class Process
         }
     }
 
-    protected function getUpdatedFromDateInNetsuiteFormat()
+    protected function getUpdatedFromDateInNetsuiteFormat(string $flagCode)
     {
-        $lastUpdateDate = $this->lastUpdateManager->getLastUpdateDate(LastUpdateManager::IMPORT_FLAG);
+        $lastUpdateDate = $this->lastUpdateManager->getLastUpdateDate($flagCode)
+            ?: $this->lastUpdateManager->getLastUpdateDate(LastUpdateManager::IMPORT_FLAG);
         $lastUpdateDate = $lastUpdateDate ? new \DateTime($lastUpdateDate) : null;
 
         $updatedFromDefault = $this->queueConfig->getUpdatedFromMinutes();

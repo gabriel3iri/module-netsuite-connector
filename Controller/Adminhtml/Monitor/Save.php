@@ -53,7 +53,7 @@ class Save extends Action implements HttpPostActionInterface, HttpGetActionInter
                 throw new DataIntegrityException('Nothing to save, this entry does not have Data associated.');
             }
 
-            $overwrite = (bool)($postData['overwrite_payload'] ?? false);
+            $overwrite = filter_var($postData['overwrite_payload'] ?? false, FILTER_VALIDATE_BOOLEAN);
             $payload = $postData['payload'] ?? [];
 
             $monitorItem->setOverwritePayload($overwrite);

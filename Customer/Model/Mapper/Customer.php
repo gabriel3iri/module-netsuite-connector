@@ -149,7 +149,8 @@ class Customer
         SearchCriteriaBuilder $searchCriteriaBuilder,
         CollectionFactory $countryCollectionFactory,
         PriceLevel $priceLevel,
-        private readonly \MageOS\NetSuiteConnector\CustomerImport\Model\Customer\Export\IsImportableFlag $isImportableFlag
+        private readonly \MageOS\NetSuiteConnector\CustomerImport\Model\Customer\Export\IsImportableFlag $isImportableFlag,
+        private readonly \Psr\Log\LoggerInterface $logger
     ) {
         $this->addressRepositoryInterface = $addressRepositoryInterface;
         $this->countryInformationAcquirerInterfaceFactory = $countryInformationAcquirerInterfaceFactory;
@@ -179,6 +180,50 @@ class Customer
     public function getExternalIdFromOrder($order): string
     {
         return $order->getCustomerEmail() . '_' . $order->getStoreId();
+    }
+
+    /**
+     * A failed lookup falls through to the next one. A blind add would create a duplicate NetSuite customer.
+     */
+    public function resolveNetsuiteInternalId(CustomerInterface $magentoCustomer): ?string
+    {
+        $storedIdAttribute = $magentoCustomer->getCustomAttribute('netsuite_internal_id');
+        $storedId = $storedIdAttribute ? $storedIdAttribute->getValue() : null;
+        if ($storedId) {
+            try {
+                $netsuiteRecord = $this->getByInternalId((string)$storedId);
+                if ($netsuiteRecord instanceof \NetSuite\Classes\Customer) {
+                    return (string)$storedId;
+                }
+                $this->logger->warning(
+                    "NetSuite customer lookup by internal id #{$storedId} returned an unexpected record type"
+                );
+            } catch (Exception $e) {
+                $this->logger->warning(
+                    "NetSuite customer lookup by internal id #{$storedId} failed: {$e->getMessage()}"
+                );
+            }
+        }
+
+        $internalId = $this->searchNetsuiteCustomerId('externalIdString', $this->getExternalId($magentoCustomer));
+        if ($internalId) {
+            return $internalId;
+        }
+
+        return $this->searchNetsuiteCustomerId('email', (string)$magentoCustomer->getEmail());
+    }
+
+    private function searchNetsuiteCustomerId(string $byField, string $searchValue): ?string
+    {
+        try {
+            $internalId = $this->findNetsuiteCustomer($byField, $searchValue);
+            return $internalId ?: null;
+        } catch (Exception $e) {
+            $this->logger->warning(
+                "NetSuite customer lookup by {$byField} failed: {$e->getMessage()}"
+            );
+            return null;
+        }
     }
 
     /**

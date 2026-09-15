@@ -31,8 +31,9 @@ use MageOS\NetSuiteConnector\Order\Model\Process\Export\OrderPlace;
 class CompensateReservation implements \MageOS\NetSuiteConnector\Core\Api\PostProcessHandlerInterface
 {
     public function __construct(
-        private \Magento\Sales\Api\OrderRepositoryInterface $orderRepository,
-        private \MageOS\NetSuiteConnector\Inventory\Model\Sales\Order\InventoryReservation $inventoryReservation
+        private readonly \Magento\Sales\Api\OrderRepositoryInterface $orderRepository,
+        private readonly \MageOS\NetSuiteConnector\Inventory\Model\Sales\Order\InventoryReservation $inventoryReservation,
+        private readonly \Magento\Framework\App\ResourceConnection $resourceConnection
     ) {
     }
 
@@ -41,14 +42,40 @@ class CompensateReservation implements \MageOS\NetSuiteConnector\Core\Api\PostPr
      */
     public function process(MonitorItemInterface $message, Status $status): void
     {
-        if ($status->equals(Status::DONE()) || $status->equals(Status::ERROR())) {
-            $process = $message->getProcess();
-            $entity = $message->getEntity();
+        if (!$status->equals(Status::DONE())) {
+            return;
+        }
 
-            if ($process->equals(Process::EXPORT()) && $entity === OrderPlace::MESSAGE_ACTION) {
-                $order = $this->orderRepository->get($message->getItemId());
+        $process = $message->getProcess();
+        $entity = $message->getEntity();
+        if (!$process->equals(Process::EXPORT()) || $entity !== OrderPlace::MESSAGE_ACTION) {
+            return;
+        }
+
+        $entityId = $message->getItemId();
+        $connection = $this->resourceConnection->getConnection('sales');
+        $table = $this->resourceConnection->getTableName('sales_order');
+
+        $connection->beginTransaction();
+        try {
+            $affected = $connection->update(
+                $table,
+                ['netsuite_reservation_compensated' => 1],
+                [
+                    'entity_id = ?' => $entityId,
+                    'netsuite_reservation_compensated IS NULL',
+                ]
+            );
+
+            if ($affected === 1) {
+                $order = $this->orderRepository->get($entityId);
                 $this->inventoryReservation->execute($order);
             }
+
+            $connection->commit();
+        } catch (\Throwable $exception) {
+            $connection->rollBack();
+            throw $exception;
         }
     }
 }

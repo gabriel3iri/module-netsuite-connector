@@ -41,6 +41,7 @@ use MageOS\NetSuiteConnector\Core\Model\ProcessManagement;
 use NetSuite\Classes\Customer;
 use NetSuite\Classes\InventoryItem;
 use NetSuite\Classes\Record;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 class ProcessTestPrefetchingProcessor extends AbstractImportProcessor implements BatchPrefetchInterface
@@ -137,8 +138,220 @@ class ProcessTestNonPrefetchingProcessor extends AbstractImportProcessor
     }
 }
 
+class ProcessTestThrowingImportProcessor extends AbstractImportProcessor
+{
+    public function __construct(private readonly \Throwable $failure)
+    {
+    }
+
+    public function queryNetsuite($startDateTime, $fromBeginning = true)
+    {
+        throw $this->failure;
+    }
+
+    public function isMagentoImportable(Record $record)
+    {
+        return true;
+    }
+
+    public function getMessageType()
+    {
+        return 'invoice';
+    }
+
+    public function process(Record $record)
+    {
+        return null;
+    }
+
+    public function getRecordType()
+    {
+        return 'invoice';
+    }
+
+    public function isActive()
+    {
+        return true;
+    }
+
+    public function getPermissionName()
+    {
+        return '';
+    }
+}
+
+class ProcessTestSucceedingImportProcessor extends AbstractImportProcessor
+{
+    private bool $alreadyQueried = false;
+    public ?string $receivedStartDateTime = null;
+
+    public function __construct(private readonly Record $record)
+    {
+    }
+
+    public function queryNetsuite($startDateTime, $fromBeginning = true)
+    {
+        $this->receivedStartDateTime = $startDateTime;
+        if ($this->alreadyQueried) {
+            return false;
+        }
+
+        $this->alreadyQueried = true;
+        return [$this->record];
+    }
+
+    public function isMagentoImportable(Record $record)
+    {
+        return true;
+    }
+
+    public function getMessageType()
+    {
+        return 'customer';
+    }
+
+    public function process(Record $record)
+    {
+        return null;
+    }
+
+    public function getRecordType()
+    {
+        return 'customer';
+    }
+
+    public function isActive()
+    {
+        return true;
+    }
+
+    public function getPermissionName()
+    {
+        return '';
+    }
+}
+
 class ProcessTest extends TestCase
 {
+    public function testProcessImportContinuesToTheNextEntityTypeWhenOneEntityTypeFails(): void
+    {
+        $throwingProcessor = new ProcessTestThrowingImportProcessor(new \RuntimeException('search failed'));
+
+        $record = new Customer();
+        $succeedingProcessor = new ProcessTestSucceedingImportProcessor($record);
+
+        $importProcessor = $this->createStub(ImportProcessor::class);
+        $importProcessor->method('getImportableEntities')->willReturn(
+            ['invoice' => $throwingProcessor, 'customer' => $succeedingProcessor]
+        );
+
+        $connectorConfig = $this->createStub(ConnectorConfig::class);
+        $connectorConfig->method('isEnabled')->willReturn(true);
+
+        $repository = $this->createStub(Repository::class);
+        $repository->method('getServerTime')->willReturn('2026-09-15T00:00:00+0000');
+
+        $lastUpdateManager = $this->createMock(LastUpdateManager::class);
+        $lastUpdateManager->method('getLastUpdateDate')->willReturn(null);
+        $lastUpdateManager->expects($this->once())
+            ->method('setLastUpdateDate')
+            ->with(LastUpdateManager::IMPORT_FLAG . '_customer', '2026-09-15T00:00:00+0000');
+
+        $queueConfig = $this->createStub(QueueConfig::class);
+        $queueConfig->method('__call')->willReturnCallback(
+            static fn (string $name) => $name === 'getUpdatedFromMinutes' ? 60 : null
+        );
+
+        $processManagement = $this->createMock(ProcessManagement::class);
+        $processManagement->expects($this->once())
+            ->method('processRecords')
+            ->with($succeedingProcessor, [$record]);
+
+        $logger = $this->createMock(Logger::class);
+        $logger->expects($this->once())->method('addError');
+
+        $context = $this->createStub(Context::class);
+        $context->method('getEventDispatcher')->willReturn($this->createStub(ManagerInterface::class));
+
+        $process = new Process(
+            $this->createStub(ImportQueueManager::class),
+            $queueConfig,
+            $importProcessor,
+            $this->createStub(ExportProcessor::class),
+            $lastUpdateManager,
+            $context,
+            $processManagement,
+            $connectorConfig,
+            $repository,
+            $logger,
+            $this->createStub(MessageManagementInterface::class),
+            $this->createStub(MonitorManagementInterface::class)
+        );
+
+        $process->processImport(false);
+    }
+
+    #[DataProvider('watermarkCases')]
+    public function testAnEntityStartsFromItsOwnWatermarkAndFallsBackToTheSharedOne(
+        ?string $entityDate,
+        string $sharedDate,
+        string $expectedStart
+    ): void {
+        $succeedingProcessor = new ProcessTestSucceedingImportProcessor(new Customer());
+
+        $importProcessor = $this->createStub(ImportProcessor::class);
+        $importProcessor->method('getImportableEntities')->willReturn(['customer' => $succeedingProcessor]);
+
+        $connectorConfig = $this->createStub(ConnectorConfig::class);
+        $connectorConfig->method('isEnabled')->willReturn(true);
+
+        $repository = $this->createStub(Repository::class);
+        $repository->method('getServerTime')->willReturn('2026-09-15T00:00:00+0000');
+
+        $lastUpdateManager = $this->createStub(LastUpdateManager::class);
+        $lastUpdateManager->method('getLastUpdateDate')->willReturnCallback(
+            static fn (string $flagCode) => $flagCode === LastUpdateManager::IMPORT_FLAG ? $sharedDate : $entityDate
+        );
+
+        $queueConfig = $this->createStub(QueueConfig::class);
+        $queueConfig->method('__call')->willReturnCallback(
+            static fn (string $name) => $name === 'getUpdatedFromMinutes' ? 60 : null
+        );
+
+        $context = $this->createStub(Context::class);
+        $context->method('getEventDispatcher')->willReturn($this->createStub(ManagerInterface::class));
+
+        $process = new Process(
+            $this->createStub(ImportQueueManager::class),
+            $queueConfig,
+            $importProcessor,
+            $this->createStub(ExportProcessor::class),
+            $lastUpdateManager,
+            $context,
+            $this->createStub(ProcessManagement::class),
+            $connectorConfig,
+            $repository,
+            $this->createStub(Logger::class),
+            $this->createStub(MessageManagementInterface::class),
+            $this->createStub(MonitorManagementInterface::class)
+        );
+
+        $process->processImport(false);
+
+        $this->assertSame(
+            (new \DateTime($expectedStart))->format(\DateTime::ISO8601),
+            $succeedingProcessor->receivedStartDateTime
+        );
+    }
+
+    public static function watermarkCases(): array
+    {
+        return [
+            'own watermark wins' => ['2020-06-12 00:00:00', '2020-06-01 00:00:00', '2020-06-12 00:00:00'],
+            'no own watermark uses the shared one' => [null, '2020-06-01 00:00:00', '2020-06-01 00:00:00'],
+        ];
+    }
+
     public function testTheImportQueuePrefetchesOnlyThroughProcessorsThatImplementTheInterface(): void
     {
         $inventoryRecordOne = new InventoryItem();

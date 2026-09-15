@@ -31,6 +31,9 @@ use MageOS\NetSuiteConnector\Queue\Model\Queue\Handlers\PostProcessHandlerInterf
 
 class MessageManagement implements MessageManagementInterface
 {
+    private const TRIAL_LIMIT = 10;
+    private const PRIORITY_TRIAL_LIMIT = 30;
+
     public function __construct(
         private readonly \Magento\Framework\ObjectManager\ConfigInterface $config,
         private readonly \Magento\Framework\Serialize\Serializer\Json $serializer,
@@ -82,9 +85,10 @@ class MessageManagement implements MessageManagementInterface
             foreach ($messageIds as $messageId) {
                 $message = $this->messages[$messageId] ?? $this->getMessageById($messageId);
 
-                if (RecordPriority::getPriority($message->getObject()) == 0
-                    && $message->getData('number_of_trials') >= 10
-                ) {
+                $trialLimit = RecordPriority::getPriority($message->getObject()) == 0
+                    ? self::TRIAL_LIMIT
+                    : self::PRIORITY_TRIAL_LIMIT;
+                if ($message->getData('number_of_trials') >= $trialLimit) {
                     $errorMessageIds[] = $messageId;
                     continue;
                 }

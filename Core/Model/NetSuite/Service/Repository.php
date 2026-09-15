@@ -47,6 +47,7 @@ class Repository
      * @var array
      */
     protected $cachedLists = [];
+    private array $refetchedLists = [];
     /**
      * @var \Magento\Framework\App\CacheInterface
      */
@@ -63,7 +64,8 @@ class Repository
     public function __construct(
         \Magento\Framework\App\CacheInterface $cache,
         \MageOS\NetSuiteConnector\Core\Model\Config\CacheConfig $cacheConfig,
-        \MageOS\NetSuiteConnector\Core\Model\NetSuite\Service\Management $serviceManagement
+        \MageOS\NetSuiteConnector\Core\Model\NetSuite\Service\Management $serviceManagement,
+        private readonly \Psr\Log\LoggerInterface $logger
     ) {
         $this->cache = $cache;
         $this->cacheConfig = $cacheConfig;
@@ -192,7 +194,7 @@ class Repository
             return null;
         }
 
-        if (isset($this->cachedLists[$listInternalId])) {
+        if (array_key_exists($listItemInternalId, $this->cachedLists[$listInternalId] ?? [])) {
             return $this->cachedLists[$listInternalId][$listItemInternalId];
         }
 
@@ -200,10 +202,15 @@ class Repository
         if (!empty($cachedList)) {
             $this->cachedLists[$listInternalId] = $cachedList;
 
-            if (isset($this->cachedLists[$listInternalId][$listItemInternalId])) {
+            if (array_key_exists($listItemInternalId, $this->cachedLists[$listInternalId])) {
                 return $this->cachedLists[$listInternalId][$listItemInternalId];
             }
         }
+
+        if (isset($this->refetchedLists[$listInternalId])) {
+            return null;
+        }
+        $this->refetchedLists[$listInternalId] = true;
 
         $getListRequest = new GetListRequest();
         $getListRequest->baseRef = new RecordRef();
@@ -214,11 +221,19 @@ class Repository
             return $this->serviceManagement->get()->getList($getListRequest);
         });
 
+        $this->cachedLists[$listInternalId] = [];
         foreach ($response->readResponseList->readResponse[0]->record->customValueList->customValue as $listValue) {
             $this->cachedLists[$listInternalId][$listValue->valueId] = $listValue->value;
         }
 
         $this->saveInCache($this->cachedLists[$listInternalId], $cacheKey);
+
+        if (!array_key_exists($listItemInternalId, $this->cachedLists[$listInternalId])) {
+            $this->logger->warning(
+                "NetSuite custom list {$listInternalId} has no value {$listItemInternalId} after refetch"
+            );
+            return null;
+        }
 
         return $this->cachedLists[$listInternalId][$listItemInternalId];
     }

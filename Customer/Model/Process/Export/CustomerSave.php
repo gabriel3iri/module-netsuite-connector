@@ -68,10 +68,7 @@ class CustomerSave extends AbstractExportProcessor
         $this->registry->register('netsuite_skip_customer_export', true, true);
 
         $netsuiteService = $this->serviceManagement->get();
-        $customerExists = $this->customerMapperHelper->findNetsuiteCustomer(
-            'externalIdString',
-            $this->customerMapperHelper->getExternalId($magentoCustomer)
-        );
+        $customerExists = $this->customerMapperHelper->resolveNetsuiteInternalId($magentoCustomer);
         $netsuiteCustomer = $this->customerMapperHelper->getNetsuiteFormat($magentoCustomer);
 
         $this->eventManager->dispatch(

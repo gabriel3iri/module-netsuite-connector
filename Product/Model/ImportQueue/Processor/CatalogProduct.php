@@ -123,13 +123,17 @@ class CatalogProduct extends EntityProcessor
 
     public function reindexAndCleanCache(): void
     {
-        $globalAffectedIds = $this->affectedIds;
-        if (empty($globalAffectedIds)) {
+        $affectedIds = $this->affectedIds;
+        if (empty($affectedIds)) {
             return;
         }
-        $this->reindexRows($globalAffectedIds);
-        // Note: clean_cache_by_tags is also called in reindexRows trace
-        $this->clearProductCache($globalAffectedIds);
+
+        try {
+            $this->reindexRows($affectedIds);
+            $this->clearProductCache($affectedIds);
+        } finally {
+            $this->affectedIds = [];
+        }
     }
 
     private function reindexRows(array $productIds): void

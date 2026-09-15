@@ -146,12 +146,12 @@ class Management
     public function retryNetSuiteQuery(callable $query, int $retry = 5)
     {
         $errors = [];
-        for ($i = 1; $i < $retry; $i++) {
+        for ($i = 1; $i <= $retry; $i++) {
             try {
                 $response = $query();
                 ResponseValidator::validate($response);
                 return $response;
-            } catch (NetSuiteRuntimeException $e) {
+            } catch (NetSuiteRuntimeException | \SoapFault $e) {
                 $errors[] = $e->getMessage();
                 sleep($i);// phpcs:ignore
                 continue;

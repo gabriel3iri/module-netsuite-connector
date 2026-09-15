@@ -44,6 +44,11 @@
             <column name="status"/>
             <column name="updated_at"/>
         </index>
+        <index referenceId="MAGEOS_NETSUITE_MESSAGE_ITEM_ID_ACTION_QUEUE" indexType="btree">
+            <column name="item_id"/>
+            <column name="action"/>
+            <column name="queue"/>
+        </index>
     </table>
 
     <table name="mageos_netsuite_monitor" resource="default" engine="innodb"
@@ -104,6 +109,8 @@
                 comment="NetSuite internal ID"/>
         <column xsi:type="datetime" name="netsuite_last_import_date" on_update="false" nullable="true"
                 comment="NetSuite last import date"/>
+        <column xsi:type="smallint" name="netsuite_reservation_compensated" padding="5" unsigned="true" nullable="true"
+                comment="NetSuite inventory reservation compensated for this order"/>
         <index referenceId="SALES_ORDER_NETSUITE_INTERNAL_ID" indexType="btree">
             <column name="netsuite_internal_id"/>
         </index>

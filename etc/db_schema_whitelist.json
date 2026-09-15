@@ -13,7 +13,8 @@
             "updated_at": true
         },
         "index": {
-            "MAGEOS_NETSUITE_MESSAGE_STATUS_UPDATED_AT": true
+            "MAGEOS_NETSUITE_MESSAGE_STATUS_UPDATED_AT": true,
+            "MAGEOS_NETSUITE_MESSAGE_ITEM_ID_ACTION_QUEUE": true
         },
         "constraint": {
             "PRIMARY": true,
@@ -74,7 +75,8 @@
     "sales_order": {
         "column": {
             "netsuite_internal_id": true,
-            "netsuite_last_import_date": true
+            "netsuite_last_import_date": true,
+            "netsuite_reservation_compensated": true
         },
         "index": {
             "SALES_ORDER_NETSUITE_INTERNAL_ID": true
