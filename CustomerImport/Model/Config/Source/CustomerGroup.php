@@ -64,7 +64,7 @@ class CustomerGroup implements \Magento\Framework\Data\OptionSourceInterface
         $options = [];
         $searchCriteria = $this->searchCriteriaBuilderFactory
             ->create()
-            ->addFilter('customer_group_id', self::NOT_LOGGED_ID, 'neq')
+            ->addFilter('id', self::NOT_LOGGED_ID, 'neq')
             ->create();
         $groupList = $this->groupRepository->getList($searchCriteria)->getItems();
         foreach ($groupList as $group) {
