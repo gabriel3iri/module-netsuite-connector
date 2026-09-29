@@ -18,7 +18,9 @@
 
 namespace MageOS\NetSuiteConnector\Test\Unit\Product\Model\Product\Import\Type;
 
-use Magento\CatalogImportExport\Model\Import\Product as ImportEntityModel;
+use Magento\Framework\App\ResourceConnection;
+use Magento\Framework\DB\Adapter\AdapterInterface;
+use MageOS\NetSuiteConnector\Core\Model\Plugin\ImportExport\PluginState;
 use MageOS\NetSuiteConnector\Product\Model\Product\Import\Type\Configurable;
 use MageOS\NetSuiteConnector\Product\Model\Product\Import\Type\Configurable\RedundantLinkCleaner;
 use PHPUnit\Framework\TestCase;
@@ -26,30 +28,71 @@ use PHPUnit\Framework\TestCase;
 class ConfigurableTest extends TestCase
 {
     /**
-     * saveData() calls the parent save, then feeds its own super attribute
-     * data to the cleaner.
+     * _insertData() runs the parent insert, then feeds the super attribute
+     * data of the current bunch to the cleaner while the connector import runs.
      */
-    public function testSaveDataCallsTheCleaner(): void
+    public function testInsertDataCallsTheCleanerWhileTheConnectorImportRuns(): void
+    {
+        $superAttributesData = $this->emptySuperAttributesData();
+
+        $cleaner = $this->createMock(RedundantLinkCleaner::class);
+        $cleaner->expects($this->once())->method('clean')->with($superAttributesData);
+
+        $configurable = $this->buildConfigurable($cleaner, true, $superAttributesData);
+
+        $this->invokeInsertData($configurable);
+    }
+
+    /**
+     * Outside the connector import, for example an admin CSV import, the
+     * cleaner must not run so core keeps the children the file does not list.
+     */
+    public function testInsertDataSkipsTheCleanerOutsideTheConnectorImport(): void
     {
         $cleaner = $this->createMock(RedundantLinkCleaner::class);
-        $cleaner->expects($this->once())->method('clean')->with(null);
+        $cleaner->expects($this->never())->method('clean');
 
-        $entityModel = $this->createStub(ImportEntityModel::class);
-        $entityModel->method('getNewSku')->willReturn([]);
-        $entityModel->method('getNextBunch')->willReturn(false);
+        $configurable = $this->buildConfigurable($cleaner, false, $this->emptySuperAttributesData());
 
-        $configurable = $this->getStubBuilder(Configurable::class)
-            ->disableOriginalConstructor()
-            ->onlyMethods(['getSuperAttributeData'])
-            ->getStub();
-        $configurable->method('getSuperAttributeData')->willReturn(null);
+        $this->invokeInsertData($configurable);
+    }
 
-        $this->setProtectedProperty($configurable, '_entityModel', $entityModel);
+    private function emptySuperAttributesData(): array
+    {
+        return [
+            'attributes' => [],
+            'labels' => [],
+            'super_link' => [],
+            'relation' => [],
+        ];
+    }
+
+    private function buildConfigurable(
+        RedundantLinkCleaner $cleaner,
+        bool $isRunning,
+        array $superAttributesData
+    ): Configurable {
+        $state = $this->createStub(PluginState::class);
+        $state->method('isRunning')->willReturn($isRunning);
+
+        $resource = $this->createStub(ResourceConnection::class);
+        $resource->method('getTableName')->willReturnArgument(0);
+
+        $configurable = (new \ReflectionClass(Configurable::class))->newInstanceWithoutConstructor();
+
+        $this->setProtectedProperty($configurable, '_resource', $resource);
+        $this->setProtectedProperty($configurable, 'connection', $this->createStub(AdapterInterface::class));
+        $this->setProtectedProperty($configurable, '_superAttributesData', $superAttributesData);
         $this->setPrivateProperty($configurable, Configurable::class, 'redundantLinkCleaner', $cleaner);
+        $this->setPrivateProperty($configurable, Configurable::class, 'state', $state);
 
-        $result = $configurable->saveData();
+        return $configurable;
+    }
 
-        $this->assertSame($configurable, $result);
+    private function invokeInsertData(Configurable $configurable): void
+    {
+        $method = new \ReflectionMethod($configurable, '_insertData');
+        $method->invoke($configurable);
     }
 
     private function setProtectedProperty(object $object, string $property, $value): void

@@ -24,7 +24,7 @@ namespace MageOS\NetSuiteConnector\Product\Model\Product\Import\Type\Configurabl
 use Magento\Framework\DB\Adapter\AdapterInterface;
 
 /**
- * Deletes the super attributes and super links that the latest configurable product import no longer lists.
+ * Deletes the super attributes, super links and relations that the latest configurable product import no longer lists.
  */
 class RedundantLinkCleaner
 {
@@ -86,6 +86,22 @@ class RedundantLinkCleaner
             if ($toDelete) {
                 $this->connection->delete($linkTable, implode(' OR ', $toDelete));
             }
+        }
+
+        if (!empty($this->superAttributesData['relation'])) {
+            $relationTable = $this->resource->getTableName('catalog_product_relation');
+            $relations = [];
+            foreach ($this->superAttributesData['relation'] as $entry) {
+                $relations[$entry['parent_id']][] = $entry['child_id'];
+            }
+
+            $toDeleteRelations = [];
+            foreach ($relations as $parent_id => $children) {
+                $toDeleteRelations[] = $this->connection->quoteInto('(parent_id=?', $parent_id) . ' AND ' .
+                    $this->connection->quoteInto('child_id NOT IN(?))', $children);
+            }
+
+            $this->connection->delete($relationTable, implode(' OR ', $toDeleteRelations));
         }
     }
 }

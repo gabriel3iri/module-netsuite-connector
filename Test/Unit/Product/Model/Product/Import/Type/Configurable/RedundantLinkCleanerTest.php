@@ -74,6 +74,56 @@ class RedundantLinkCleanerTest extends TestCase
     }
 
     /**
+     * Relation entries delete the rows of catalog_product_relation that the
+     * parent no longer lists, matching the super link delete.
+     */
+    public function testItDeletesRedundantRelations(): void
+    {
+        $resource = $this->createStub(ResourceConnection::class);
+        $connection = $this->createMock(AdapterInterface::class);
+
+        $resource->method('getConnection')->willReturn($connection);
+        $resource->method('getTableName')->willReturnArgument(0);
+        $connection->method('quoteInto')->willReturnCallback(
+            static function (string $text, $value): string {
+                $formatted = is_array($value) ? implode(',', $value) : (string)$value;
+                return str_replace('?', $formatted, $text);
+            }
+        );
+
+        $calls = [];
+        $connection->expects($this->exactly(3))
+            ->method('delete')
+            ->willReturnCallback(function (string $table, string $where) use (&$calls): int {
+                $calls[$table] = $where;
+                return 1;
+            });
+
+        $superAttributesData = [
+            'attributes' => [
+                10 => [1 => ['product_super_attribute_id' => 1]],
+            ],
+            'super_link' => [
+                ['parent_id' => 10, 'product_id' => 20],
+                ['parent_id' => 10, 'product_id' => 21],
+            ],
+            'relation' => [
+                ['parent_id' => 10, 'child_id' => 20],
+                ['parent_id' => 10, 'child_id' => 21],
+                ['parent_id' => 11, 'child_id' => 30],
+            ],
+        ];
+
+        $cleaner = new RedundantLinkCleaner($resource);
+        $cleaner->clean($superAttributesData);
+
+        $this->assertSame(
+            '(parent_id=10 AND child_id NOT IN(20,21)) OR (parent_id=11 AND child_id NOT IN(30))',
+            $calls['catalog_product_relation']
+        );
+    }
+
+    /**
      * Null data, the shape saveData() passes when no configurable was in the
      * bunch, calls nothing.
      */
