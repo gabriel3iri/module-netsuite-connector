@@ -37,6 +37,7 @@ class Configurable extends \Magento\ConfigurableImportExport\Model\Import\Produc
         \Magento\ImportExport\Model\ResourceModel\Helper $resourceHelper,
         \Magento\Catalog\Model\ResourceModel\Product\CollectionFactory $_productColFac,
         private readonly \MageOS\NetSuiteConnector\Product\Model\Product\Import\Type\Configurable\RedundantLinkCleaner $redundantLinkCleaner,
+        private readonly \MageOS\NetSuiteConnector\Core\Model\Plugin\ImportExport\PluginState $state,
         ?\Magento\Framework\EntityManager\MetadataPool $metadataPool = null,
         ?\Magento\CatalogImportExport\Model\Import\Product\SkuStorage $skuStorage = null,
         ?\Magento\Eav\Model\ResourceModel\Entity\Attribute\Option\CollectionFactory $attributeOptionCollectionFactory = null
@@ -55,15 +56,14 @@ class Configurable extends \Magento\ConfigurableImportExport\Model\Import\Produc
         );
     }
 
-    public function getSuperAttributeData()
+    protected function _insertData()
     {
-        return $this->_superAttributesData;
-    }
+        parent::_insertData();
 
-    public function saveData()
-    {
-        parent::saveData();
-        $this->redundantLinkCleaner->clean($this->getSuperAttributeData());
-        return $this;
+        if (!$this->state->isRunning()) {
+            return;
+        }
+
+        $this->redundantLinkCleaner->clean($this->_superAttributesData);
     }
 }
